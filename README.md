@@ -11,8 +11,6 @@ The individual pipelines are highly portable and written in nextflow DSL2
 - singularity	3.7.3+
 
 ## Global variables required:
-$NXF_PIPEDIR   : Path to folder containing SSDSPipeline_1.8.nf
-
 $NXF_GENOMES   : Path to folder containing reference genomes for alignment
                  ** This folder requires a very specific structure (see below) **
 
