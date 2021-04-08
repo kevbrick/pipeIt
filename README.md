@@ -42,10 +42,10 @@ SLURM_JOBID global variable for each HPC job.
 
 ## USAGE:
 
-pipeIt2 --g <genome name>
+>pipeIt2 --g \<genome name\>
 
-        --fq1 <fastq read1>
+>        --fq1 <fastq read1>
 
-        --fq2 <fastq read2 (if applicable)>
+>        --fq2 <fastq read2 (if applicable)>
 
-        --pipe <pipeline>
+>        --pipe <pipeline>
