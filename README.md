@@ -1,36 +1,14 @@
-# SSDS nextflow pipeline :
-**_Initial paper:_** [Khil et al. Genome Research 2012](https://genome.cshlp.org/content/22/5/957.long)
+# RDCO lab: pipeIt code and nextflow DSL2 pipelines :
 
-**_Technical paper:_** [Brick, Pratto et al., Methods in Enzymology 2018](https://www.sciencedirect.com/science/article/pii/S0076687917303750?via%3Dihub)
+This repo contins nextflow DSL2 coded pipelines used by the RDCO lab @ NIDDK, NIH. 
+Little effort has been put into portability, so using these in another setting may require extensive customization.
 
-This nextflow pipeline is configured to work on a SLURM-based HPC with modules. It can be relatively easily configured to run on other systems (see nextflow documentation : https://www.nextflow.io/).
+pipeIt2 is the control script to allow different pipelines to be run in a standardized manner. 
+The individual pipelines are highly portable and written in nextflow DSL2
 
 ## Requirements:
-*Tools / programs :*
-- bedtools	2.25.0
-- bwa	0.7.17
-- deeptools	3.0.1
-- fastqc	0.11.8
-- fastqtools	0.8
-- fastxtoolkit	0.0.14
-- java	1.8.0_92
-- nextflow	0.30.2
-- picard	2.9.2
-- python	2.7
-- samtools	1.8
-- sratoolkit	2.9.2
-- trimgalore	0.4.5
-- ucsc	365
-
-**NOTE:** These are the recommended (and tested) version of each tool, however newer / older versions will work in most cases. One exception is older versions of nextflow, which will not work.
-
-*Perl modules:*
-- BioPerl
-- Bio::DB::Sam
-- Getopt::Long
-- Math::Round
-- Statistics::Descriptive
-- Time::HiRes
+- nextflow	20.10.0+
+- singularity	3.7.3+
 
 ## Global variables required:
 $NXF_PIPEDIR   : Path to folder containing SSDSPipeline_1.8.nf
@@ -41,6 +19,9 @@ $NXF_GENOMES   : Path to folder containing reference genomes for alignment
 $SLURM_JOBID   : Specifies the temporary subfolder to use  (see Temp folder requirements below)
 
 ### NXF_GENOMES Folder structure
+The Illumina igenomes folder structure is not yet fully integrated. 
+
+#### Alternative genomes structure
 Each reference genome should be contained in a separate folder (i.e. $NXF_GENOMES/mouse_mm10). The sub-structure within this folder should be as follows:
 
 $NXF_GENOMES/\<genome\>/genome.fa                : Genome fasta file
@@ -59,34 +40,8 @@ The pipeline requires a high-level temporary folder called /lscratch. On a SLURM
 /lscratch folder for temporary files
 SLURM_JOBID global variable for each HPC job.
 
-## Pipeline execution
-
-### RUN ON LOCAL MACHINE
-```
-nextflow run -c $NXF_PIPEDIR/config.nf -profile local \
-    $NXF_PIPEDIR/SSDSPipeline_1.8.nf \
-    --fq1 $NXF_PIPEDIR/tests/fastq/ssdsLong.100k.R1.fastq \
-    --fq2 $NXF_PIPEDIR/tests/fastq/ssdsLong.100k.R2.fastq \
-    --r1Len 36 \
-    --r2Len 40 \
-    --genome mm10 \
-    --name testSSDS1.8 \
-    --outdir SSDS1.8_test
-```
-
-### RUN ON SLURM CLUSTER
-```
-nextflow run -c $NXF_PIPEDIR/config.nf -profile slurm \
-    $NXF_PIPEDIR/SSDSPipeline_1.8.nf \
-    --fq1 $NXF_PIPEDIR/tests/fastq/ssdsLong.100k.R1.fastq \
-    --fq2 $NXF_PIPEDIR/tests/fastq/ssdsLong.100k.R2.fastq \
-    --r1Len 36 \
-    --r2Len 40 \
-    --genome mm10 \
-    --name testSSDS1.8 \
-    --outdir SSDS1.8_test
-```
-
-### TESTS
-The tests/fastq folder contains small fastq files from an SSDS experiment in mouse. The test should take a few minutes on a local machine (64Gb RAM, 16 Cores).
-
+## USAGE:
+pipeIt2 --g <genome name>
+        --fq1 <fastq read1>
+        --fq2 <fastq read2 (if applicable)>
+        --pipe <pipeline>
