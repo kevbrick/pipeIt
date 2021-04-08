@@ -44,7 +44,21 @@ SLURM_JOBID global variable for each HPC job.
 
 ```
 pipeIt2 --g <genome name>
-        --fq1 <fastq read1>
-        --fq2 <fastq read2 (if applicable)>
+        --f1 <fastq read1>
+        --f2 <fastq read2 (if applicable)>
         --pipe <pipeline>
+```
+
+## Direct pipeline usage
+
+For example, the simple BWA alignment pipeline: 
+```
+nextflow run pipelines/align.nf
+             -c config/nextflow.config.nf
+             -profile singularity 
+             --fq1 data.R1.fastq.gz 
+             --fq2 data.R2.fastq.gz
+             --pe true 
+             --aligner bwa
+             --genome mm10
 ```
