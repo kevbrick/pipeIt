@@ -41,6 +41,7 @@ The pipeline requires a high-level temporary folder called /lscratch. On a SLURM
 SLURM_JOBID global variable for each HPC job.
 
 ## USAGE:
+
 pipeIt2 --g <genome name>
 
         --fq1 <fastq read1>
