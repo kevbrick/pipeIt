@@ -146,9 +146,9 @@ process {
   }
 
   withName:cool2multirescool{
-    cpus = { 8 }
+    cpus = { 16 }
     memory = { 32.GB }
-    time = { 16.h * task.attempt * process_length_factor }
+    time = { 8.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 

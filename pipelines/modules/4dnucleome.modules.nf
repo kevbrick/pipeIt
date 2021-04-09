@@ -626,7 +626,7 @@ process cool2multirescool{
 
   run-cool2multirescool.sh \
      -i ${cool} \
-     -p 1 \
+     -p ${task.cpus} \
      -o ${sample} \
      -c 10000000 \
      -u 1000,2000,5000,10000,25000,50000,100000,250000,500000,1000000,2500000,5000000,10000000
