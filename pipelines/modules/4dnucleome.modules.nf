@@ -581,6 +581,50 @@ process run_cooler{
   """
   }
 
+process balance_cool_matrix{
+  tag { sample }
+
+  publishDir "${params.outdir}/cooler", mode: 'copy', overwrite: true
+
+  input:
+  tuple(val(sample), path(cool))
+
+  output:
+  tuple(val(sample),path('*.balanced.cool'))
+
+  script:
+  def balanced_cool=cool.name.replaceFirst(".cool",".balanced.cool")
+  """
+  cp ${cool} ${bal}
+
+  if [ -f "${params.blacklist}" ]; then
+    grep -vP '(rand|Un)' ${params.blacklist} |sort -k1,1 -k2n,2n -V >bl.bed
+    cooler balance -p ${task.cpus} --blacklist bl.bed --max-iters 500 --force ${bal}
+  else
+    cooler balance -p ${task.cpus} --max-iters 500 --force ${bal}
+  fi
+
+  """
+  }
+
+process call_compartments_from_cool{
+  tag { cool }
+
+  publishDir "${params.outdir}/annotation", mode: 'copy', overwrite: true
+
+  input:
+  tuple(val(sample), path(cool))
+
+  output:
+  tuple(val(sample),path('*.balanced.cool'))
+
+  script:
+  def balanced_cool=cool.name.replaceFirst(".cool",".compartments")
+  """
+  cooltools call-compartments -v --bigwig -o ${compartments} ${cool}
+  """
+  }
+
 process run_juicebox_pre{
   tag { sample }
 

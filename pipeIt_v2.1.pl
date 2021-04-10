@@ -489,28 +489,6 @@ sub whatPipe{
 			$pArgs .= ' --single-end ' if ($wFQ1 && !$wFQ2);
 		}
 
-		# if ($type eq 'microc'){
-		# 	$pArgs .= ' --dnase ';
-		# 	$pArgs .= ' --min_cis_dist 250 ';
-		# 	$pArgs .= ' --rm_singleton --rm_dup --rm_multi ';
-		# 	$pArgs .= " --bin_size $hic_binsizes ";
-		# 	$pArgs .= ' --split_fastq --fastq_chunks_size 20000000 ';
-		# 	$pArgs .= ' --fasta '.$ENV{NXF_GENOMES}.'/'.$genome.'/genome.fa ' ;
-		# 	$pArgs .= ' --bwt2_index '.$ENV{NXF_GENOMES}.'/'.$genome.'/Bowtie2Index/genome ' if (-e $ENV{NXF_GENOMES}.'/'.$genome.'/Bowtie2Index/genome.rev.2.bt2');
-		# }
-		#
-		# if ($type eq 'hic'){
-		# 	## Limit resolution to 1Kb for Hi-C
-		# 	$hic_binsizes =~ s/(,1000,).+$/$1/;
-		# 	$pArgs .= " --restriction_site \'$hic_restriction_site\' ";
-		# 	$pArgs .= " --ligation_site \'$hic_ligation_site\' ";
-		# 	$pArgs .= ' --rm_singleton --rm_dup --rm_multi ';
-		# 	$pArgs .= " --bin_size $hic_binsizes ";
-		# 	$pArgs .= ' --split_fastq --fastq_chunks_size 20000000 ';
-		# 	$pArgs .= ' --fasta '.$ENV{NXF_GENOMES}.'/'.$genome.'/genome.fa ' ;
-		# 	$pArgs .= ' --bwt2_index '.$ENV{NXF_GENOMES}.'/'.$genome.'/Bowtie2Index/genome ' if (-e $ENV{NXF_GENOMES}.'/'.$genome.'/Bowtie2Index/genome.rev.2.bt2');
-		# }
-
 	}else{
 		if ($type =~ /^hic$/){
 			my $sampleid = $wFQ1;
@@ -521,6 +499,10 @@ sub whatPipe{
 
 			$pArgs .= ($dnase?" --dnase true ":((-e $reFile)?" --dnase false --refile $reFile":" --dnase false")).($phased?" --phased true ":" --phased false");
 			$pArgs .= " --aligner ".$hic_aligner ;
+
+			## NEEDED FOR BALANCING COOL FILE
+			my $blacklist = $ENV{NXF_GENOMES}.'/'.$genome.'/blacklist/blacklist.bed';
+			$pArgs .= " --blacklist $blacklist" if (- $blacklist);
 
 			if ($fastqSplitSize < 10000000){
 				print STDERR "#######################################################################\n";

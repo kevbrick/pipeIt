@@ -61,6 +61,7 @@ params.saveBAM        = false
 params.splitSz        = 50000000
 params.aligner        = ""
 params.vcf            = '/data/RDCO/annotation/mm10/SNV/mgp.v5.merged.snps_all.dbSNP142.B6vCAST.vcf'
+params.blacklist      = ''
 params.genomes2screen = 'mm10,hg38,univec'
 params.gzipoutput     = true
 params.sortFQ         = false
@@ -87,7 +88,7 @@ if (params.aligner == 'bwa'){
   log.info "BOWTIE IDX: ${bt2idx}"
 }
 log.info "\n"
-log.info "FASTQ split size = ${params.splitSize}"
+log.info "FASTQ split size = ${params.splitSz}"
 log.info "=========================================================================================\n"
 
 // import modules for pipeline
@@ -97,7 +98,8 @@ include { bwa4D; pairsam; mergesampairs ; pairsQC; merge_biological_replicates;
           bowtie2_end2end; trim_hic_reads; bowtie2_on_trimmed_reads;
           bowtie2_mergeR1R2; bowtie2_make_paired_bam;
           fixMDtags; markAlleleOfOrigin; splitByPhase;
-          pairtools_stats; multiqc ; filter_pairs; concatenate_phasing_reports} from "./modules/4dnucleome.modules.nf" \
+          pairtools_stats; multiqc ; filter_pairs; concatenate_phasing_reports;
+          balance_cool_matrix; call_compartments_from_cool} from "./modules/4dnucleome.modules.nf" \
   params(bwaidx: bwaidx, \
          bt2idx: bt2idx, \
          re: params.re, \
@@ -108,6 +110,7 @@ include { bwa4D; pairsam; mergesampairs ; pairsQC; merge_biological_replicates;
          phased: params.phased, \
          saveBAM: params.saveBAM, \
          vcf: params.vcf, \
+         blacklist: params.blacklist, \
          ligation_site: params.ligationsite)
 
 include { getFQs; fastqC } from "./modules/getFQ.modules.nf" \
@@ -141,7 +144,7 @@ workflow {
                def reads1 = file("${row['R1']}")
                def reads2 = file("${row['R2']}")
                return [ id, sample, sequencing_replicate, biological_replicate, reads1, reads2 ]}
-           .splitFastq(by: params.splitSize, pe:true, file:true,compress:true)
+           .splitFastq(by: params.splitSz, pe:true, file:true,compress:true)
   }else{
     // Otherwise, just use usual pipeIt stuff
     fastqs = getFQs()
@@ -154,7 +157,7 @@ workflow {
         def reads1 = row[0]
         def reads2 = row[1]
         return [ id, sample, sequencing_replicate, biological_replicate, reads1, reads2 ]}
-    .splitFastq(by: params.splitSize, pe:true, file:true, compress:true)
+    .splitFastq(by: params.splitSz, pe:true, file:true, compress:true)
   }
 
   // Get RE file (if available) ... otherwise, make one
@@ -245,9 +248,10 @@ workflow {
   }
 
   cool    = run_cooler(validpairs)
-  hic     = run_juicebox_pre(validpairs)
-
+  balcool = balance_cool_matrix(cool)
   coolM   = cool2multirescool(cool)
+
+  hic     = run_juicebox_pre(validpairs)
 
   hicool  = hicnormvector_to_mcool(cool.join(hic))
 

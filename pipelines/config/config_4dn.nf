@@ -138,6 +138,20 @@ process {
     container = "docker://duplexa/4dn-hic:v43"
   }
 
+  withName:balance_cool_matrix{
+    cpus = { 16 }
+    memory = { 16.GB }
+    time = { 10.h * task.attempt * process_length_factor }
+    container = "docker://kevbrick/cooltools:1.0"
+  }
+
+  withName:call_compartments_from_cool{
+    cpus = { 32 }
+    memory = { 1500.GB }
+    time = { 12.h * task.attempt * process_length_factor }
+    container = "docker://kevbrick/cooltools:1.0"
+  }
+
   withName:run_juicebox_pre{
     cpus = { 8 }
     memory = { 64.GB }

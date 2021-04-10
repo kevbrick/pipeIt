@@ -298,12 +298,11 @@ process fastqC {
   done
 
   for f in *fastq; do
-    head -n 10000000 \$f >subset.fastq
+    mv \$f all_\$f
+    head -n 10000000 all_\$f >\$f
 
-    fastqc -t 4 subset.fastq
-
-    mv subset_fastqc.html \$f"c_report.html"
-    mv subset_fastqc.zip  \$f"c_report.zip"
+    fastqc -t 4 \$f
+    
   done
   """
   }
