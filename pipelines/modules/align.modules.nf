@@ -1,6 +1,5 @@
 process minimap2SR {
-  cpus 4
-  memory '12 GB'
+  label 'aligner'
 
   time { fq.size() < 1000000000 ? 0.5.hour : 1.hour * (1+fq.size()/1000000000 * task.attempt) }
 
@@ -30,8 +29,7 @@ process minimap2SR {
   }
 
 process minimap2PE {
-  cpus 4
-  memory '12 GB'
+  label 'aligner'
 
   time { fq1.size() < 3.GB ? 2.hour : 2.hour + 1.hour * (fq1.size()/3000000000) * task.attempt }
 
@@ -61,8 +59,7 @@ process minimap2PE {
   }
 
 process bwaAlnSR {
-  cpus 4
-  memory '12 GB'
+  label 'aligner'
 
   time { fq.size() < 1.GB ? 2.hour : 2.hour + 3.hour * (fq.size()/3000000000) * task.attempt }
 
@@ -97,8 +94,7 @@ process bwaAlnSR {
   }
 
 process bwaAlnPE {
-  cpus 4
-  memory '12 GB'
+  label 'aligner'
 
   time { fq1.size() < 1.GB ? 2.hour : 2.hour + 3.hour * (fq1.size()/3000000000) * task.attempt }
 
@@ -139,8 +135,7 @@ process bwaAlnPE {
   }
 
 process bwaMemSR {
-  cpus 4
-  memory '32 GB'
+  label 'aligner'
 
   time { fq.size() < 3.GB ? 2.hour : 2.hour + 3.hour * (fq.size()/3000000000) * task.attempt }
 
@@ -170,8 +165,7 @@ process bwaMemSR {
   }
 
 process bwaMemPE {
-  cpus 4
-  memory '32 GB'
+  label 'aligner'
 
   time { fq1.size() < 3.GB ? 2.hour : 2.hour + 3.hour * (fq1.size()/3000000000) * task.attempt }
 
@@ -203,8 +197,7 @@ process bwaMemPE {
   }
 
 process bowtie2SR {
-  cpus 4
-  memory '12 GB'
+  label 'aligner'
 
   time { fq.size() < 3.GB ? 2.hour : 2.hour + 1.hour * (fq.size()/3000000000) * task.attempt }
 
@@ -232,8 +225,7 @@ process bowtie2SR {
   }
 
 process bowtie2PE {
-  cpus 4
-  memory '12 GB'
+  label 'aligner'
 
   time { fq1.size() < 3.GB ? 2.hour : 2.hour + 1.hour * (fq1.size()/3000000000) * task.attempt }
 
@@ -261,12 +253,10 @@ process bowtie2PE {
   }
 
 process mergeBAM {
+  label 'mergeBAM'
 
   publishDir "${params.outdir}/bam",     mode: 'copy', overwrite: true, pattern: '*bam*'
   publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true, pattern: '*txt'
-
-  cpus 8
-  memory '32 GB'
 
   time { bams[0].size() < 200000000 ? 6.hour : bams[0].size()/200000000 * task.attempt * 6.hour }
 
@@ -315,12 +305,107 @@ process mergeBAM {
   """
   }
 
+process mergeBAMv2 {
+
+  label 'mergeBAM'
+
+  time { 5.hour * task.attempt }
+
+  tag { "${name} : ${bams.size()}" }
+
+  input:
+  tuple(val(name), path(bams))
+
+  output:
+  tuple(val(name), path('*.bam'), path('*.bai'), emit: bam)
+
+  script:
+  // get INPUT files as string
+  //def input_args = bams.findAll{ it =~ ".bam\$" }.collect{ "I=$it" }.join(" ")
+  """
+  ## STUPID PAIRTOOLS CAN ADD DUPLICATE PG FIELDS TO BAM
+  ## THIS FIXES THE ISSUE (WHICH KILLS PICARD)
+  for bam in *.bam; do
+    newbam=\${bam/bam/okheader.tmpbam}
+    samtools view -h \$bam |perl -lane 'if (\$_ =~/ID:(\\S+)/){\$prog=\$1; if(\$PG{\$prog}++){\$_ =~ s/ID:(\\S+)/ID:\$1\\.\$PG{\$prog}/}}; if (\$_ =~/PN:(\\S+)/){\$prog=\$1; if(\$PN{\$prog}++){\$_ =~ s/PN:(\\S+)/PN:\$1\\.\$PN{\$prog}/}};print \$_;' |samtools view -Shb - >\$newbam
+    #samtools view -h \$bam |perl -lane 'if (\$_ =~/ID:(\\S+)/){\$prog=\$1; if(\$PG{\$prog}++){\$_ =~ s/ID:(\\S+)/ID:\$1\\.\$PG{\$prog}/}}; if (\$_ =~/PN:(\\S+)/){\$prog=\$1; if(\$PN{\$prog}++){\$_ =~ s/PN:(\\S+)/PN:\$1\\.\$PN{\$prog}/}}; print \$_;' |samtools view -Shb - >S3ok.bam
+  done
+
+  input_args=`ls *okheader.tmpbam |perl -pi -e 's/\\n/ /g' |perl -pi -e 's/(\\S+)/I=\$1/g'`
+
+  java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR MergeSamFiles TMP_DIR="\$TMPDIR" \
+                 \$input_args \
+                 O=merged.tmpbam \
+                 AS=false \
+                 VALIDATION_STRINGENCY=LENIENT
+
+  java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR SortSam TMP_DIR="\$TMPDIR" \
+                I=merged.tmpbam \
+                O=${name}.bam \
+                SO=coordinate \
+                VALIDATION_STRINGENCY=LENIENT
+
+  java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR BuildBamIndex \
+                I=${name}.bam VALIDATION_STRINGENCY=LENIENT
+  """
+  }
+
+process markBAMduplicates {
+
+  label 'mergeBAM'
+
+  publishDir "${params.outdir}/bam",     mode: 'copy', overwrite: true, pattern: '*bam*'
+  publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true, pattern: '*txt'
+
+  time { bam.size() < 2000000000 ? 6.hour : bam.size()/2000000000 * task.attempt * 6.hour }
+
+  tag { bam }
+
+  input:
+  tuple(val(name), path(bam), path(bai))
+
+  output:
+  tuple(val(name), path('*.bam'), path('*.bai'), emit: bam)
+  path('*MDmetrics.txt', emit: mdreport)
+
+  script:
+  """
+  java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR MergeSamFiles TMP_DIR="\$TMPDIR" \
+                 I=${bam} \
+                 O=merged.tmpbam \
+                 AS=true \
+                 SO=coordinate \
+                 VALIDATION_STRINGENCY=LENIENT
+
+  if [[ `samtools view -h merged.bam |head -n 100000 |samtools view -f 2 ` ]]; then
+	  java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR MarkDuplicatesWithMateCigar TMP_DIR="\$TMPDIR" \
+                   I=merged.tmpbam \
+                   O=${name}.MD.bam \
+                   PG=Picard_MarkDuplicatesWithMateCigar \
+                   M=${name}.MDmetrics.txt \
+                   MINIMUM_DISTANCE=400 \
+			     CREATE_INDEX=false \
+			     ASSUME_SORT_ORDER=coordinate \
+           VALIDATION_STRINGENCY=LENIENT
+  else
+    java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR MarkDuplicates TMP_DIR="\$TMPDIR" \
+                   I=merged.tmpbam \
+                   O=${name}.MD.bam \
+                   PG=Picard_MarkDuplicates \
+                   M=${name}.MDmetrics.txt \
+			     CREATE_INDEX=false \
+			     ASSUME_SORT_ORDER=coordinate \
+           VALIDATION_STRINGENCY=LENIENT
+  fi
+
+  java -jar -Xmx${task.memory.toGiga()}g \$PICARDJAR BuildBamIndex \
+                I=${name}.MD.bam VALIDATION_STRINGENCY=LENIENT
+  """
+  }
+
 process getPicardMetrics {
 
   publishDir "${params.outdir}/reports",  mode: 'copy', overwrite: true
-
-  cpus 4
-  memory '16 GB'
 
   time { bam.size()< 200000000 ? 2.hour * task.attempt: 2.hour + 2.hour * bam.size()/200000000 * task.attempt }
 
@@ -339,26 +424,20 @@ process getPicardMetrics {
 
   if (srpe == 'PE'){
 	  """
-	  java -jar -Xmx${picardMem}g \$PICARDJAR CreateSequenceDictionary \
+    picard -Xmx${picardMem}g CreateSequenceDictionary \
 	      R=${params.genome_fasta} \
 	      O=genome.dict \
 	      TMP_DIR=\$TMPDIR \
 	      VALIDATION_STRINGENCY=LENIENT
 
-	  #java -jar -Xmx${picardMem}g \$PICARDJAR EstimateLibraryComplexity \
-	  #    VALIDATION_STRINGENCY=LENIENT \
-	  #    I=${bam} \
-	  #    O=${name}.LibraryComplexity.picardMetrics.tab \
-	  #    TMP_DIR=\$TMPDIR
-
-	  java -jar -Xmx${picardMem}g \$PICARDJAR CollectAlignmentSummaryMetrics \
+    picard -Xmx${picardMem}g CollectAlignmentSummaryMetrics \
 	    VALIDATION_STRINGENCY=LENIENT \
 	    REFERENCE_SEQUENCE=${params.genome_fasta} \
 	    I=${bam} \
 	    O=${name}.AlignmentSummary.picardMetrics.tab \
 	    TMP_DIR=\$TMPDIR
 
-	  java -jar -Xmx${picardMem}g \$PICARDJAR CollectInsertSizeMetrics \
+    picard -Xmx${picardMem}g CollectInsertSizeMetrics \
 	      VALIDATION_STRINGENCY=LENIENT \
 	      I=${bam} \
 	      O=${name}.InsertSize.picardMetrics.tab \
@@ -366,14 +445,14 @@ process getPicardMetrics {
 	      M=0.5 \
 	      TMP_DIR=\$TMPDIR
 
-	  java -jar -Xmx${picardMem}g \$PICARDJAR MeanQualityByCycle \
+    picard -Xmx${picardMem}g MeanQualityByCycle \
 	      VALIDATION_STRINGENCY=LENIENT \
 	      I=${bam} \
 	      O=${name}.QByCycle.picardMetrics.tab \
 	      TMP_DIR=\$TMPDIR \
 	      CHART=${name}.QByCycle.picardMetrics.pdf
 
-	  java -jar -Xmx${picardMem}g \$PICARDJAR QualityScoreDistribution \
+    picard -Xmx${picardMem}g QualityScoreDistribution \
 	      VALIDATION_STRINGENCY=LENIENT \
 	      I=${bam} \
 	      O=${name}.QScoreDist.picardMetrics.tab \
@@ -382,26 +461,20 @@ process getPicardMetrics {
 	  """
   }else{
 	  """
-	  java -jar -Xmx${picardMem}g \$PICARDJAR CreateSequenceDictionary \
+    picard -Xmx${picardMem}g CreateSequenceDictionary \
 	      R=${params.genome_fasta} \
 	      O=genome.dict \
 	      TMP_DIR=\$TMPDIR \
 	      VALIDATION_STRINGENCY=LENIENT
 
-	  #java -jar -Xmx${picardMem}g \$PICARDJAR EstimateLibraryComplexity \
-	  #              VALIDATION_STRINGENCY=LENIENT \
-	  #    I=${bam} \
-	  #    TMP_DIR=\$TMPDIR \
-	  #    O=${name}.LibraryComplexity.picardMetrics.tab
-
-	  java -jar -Xmx${picardMem}g \$PICARDJAR MeanQualityByCycle \
+    picard -Xmx${picardMem}g MeanQualityByCycle \
 	      VALIDATION_STRINGENCY=LENIENT \
 	      I=${bam} \
 	      O=${name}.QByCycle.picardMetrics.tab \
 	      TMP_DIR=\$TMPDIR \
 	      CHART=${name}.QByCycle.picardMetrics.pdf
 
-	  java -jar -Xmx${picardMem}g \$PICARDJAR QualityScoreDistribution \
+    picard -Xmx${picardMem}g QualityScoreDistribution \
 	      VALIDATION_STRINGENCY=LENIENT \
 	      I=${bam} \
 	      O=${name}.QScoreDist.picardMetrics.tab \
@@ -414,9 +487,6 @@ process getPicardMetrics {
 process bamToBW {
 
   publishDir "${params.outdir}/bigwig",  mode: 'copy', overwrite: true, pattern: '*bigwig'
-
-  cpus 4
-  memory '12 GB'
 
   time { bam.size()< 1000000000 ? 0.5.hour * task.attempt: 1.hour * bam.size()/1000000000 * task.attempt }
 
@@ -444,13 +514,10 @@ process bamToBW {
   }
 
 process trimFASTQsr {
-  cpus 4
-  memory '8 GB'
+
+  label 'trimFQ'
 
 	time { fq.size() < 3.GB ? 1.hour : 1.hour + 1.hour * (fq.size()/3000000000) * task.attempt }
-
-  errorStrategy { 'retry' }
-  maxRetries 1
 
   tag {fq}
 
@@ -463,6 +530,7 @@ process trimFASTQsr {
 
   script:
   """
+  if [[ "${fq}" =~ .gz\$ ]]; then gz=${fq}; fq=\${fq/.gz/}; zcat ${fq} >\$fq; fi
   fqr1=`ls *.R1.fastq`
 
   #trimFQ1=`echo "\$fqr1" |perl -pi -e 's/.fastq/_val_1.fq/'`
@@ -478,13 +546,10 @@ process trimFASTQsr {
   }
 
 process trimFASTQpe {
-  cpus 4
-  memory '8 GB'
+
+  label 'trimFQ'
 
   time { fq[0].size() < 3.GB ? 1.hour : 1.hour + 1.hour * (fq[0].size()/3000000000) * task.attempt }
-
-  errorStrategy { 'retry' }
-  maxRetries 1
 
   tag { fq[0] }
 
@@ -496,7 +561,12 @@ process trimFASTQpe {
   //path "*_report.txt"                                                                   , emit: report
 
   script:
+  def fqR1=fq[0]
+  def fqR2=fq[1]
   """
+  if [[ "${fqR1}" =~ .gz\$ ]]; then gz=${fqR1}; fq=\${gz/.gz/}; zcat ${fqR1} >\$fq; fi
+  if [[ "${fqR2}" =~ .gz\$ ]]; then gz=${fqR2}; fq=\${gz/.gz/}; zcat ${fqR2} >\$fq; fi
+
   fqr1=`ls *.R1.fastq`
   fqr2=`ls *.R2.fastq`
   trimFQ1=`echo "\$fqr1" |perl -pi -e 's/.fastq/_val_1.fq/'`
@@ -519,13 +589,8 @@ process makeDeeptoolsBW {
   publishDir "${params.outdir}/plots",   mode: 'copy', overwrite: true, pattern: '*png'
   publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true, pattern: '*tab'
 
-  cpus 12
-  memory '16 GB'
-
   time { bam.size()< 500000000 ? 1.hour : 1.hour + 1.hour * bam.size()/500000000 * task.attempt }
 
-  errorStrategy { 'retry' }
-  maxRetries 1
   tag {bam}
 
   input:
@@ -590,13 +655,7 @@ process samStats {
 
   publishDir "${params.outdir}/reports",  mode: 'copy', overwrite: true
 
-  cpus 2
-  memory '8 GB'
-
   time { bam.size()< 10000000000 ? 1.hour : 1.hour * bam.size()/10000000000 * task.attempt }
-
-  errorStrategy { 'retry' }
-  maxRetries 1
 
   tag {bam}
 

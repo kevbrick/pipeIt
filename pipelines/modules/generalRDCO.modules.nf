@@ -1,8 +1,4 @@
 process multiQC {
-  cpus 1
-  memory '4 GB'
-
-  time '1h'
 
   input:
   path(reports)

@@ -1,6 +1,4 @@
 process ssdsAlign {
-  cpus 4
-  memory '32 GB'
 
   time { fqR1.size()<300000000? 3.hour : 3.hour * fqR1.size()/300000000 * task.attempt }
 
@@ -113,11 +111,6 @@ process mergeBAMssds {
   publishDir "${params.outdir}/bam",     mode: 'copy', overwrite: true, pattern: '*unparsed.bam*'
   publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true, pattern: '*MDmetrics.txt*'
 
-  cpus 4
-  memory '32 GB'
-
-  time { 16.hour * task.attempt }
-
   tag {params.name}
 
   input:
@@ -141,16 +134,16 @@ process mergeBAMssds {
                  TMP_DIR="\$TMPDIR" \
                  VALIDATION_STRINGENCY=LENIENT
 
-    java -jar -Xmx32g \$PICARDJAR MarkDuplicatesWithMateCigar \
-                 I=allREADS.bam \
-                 O=${name}.allReads.bam \
-                 PG=Picard2.9.2_MarkDuplicates \
-                 M=${name}.MDmetrics.txt \
-                 MINIMUM_DISTANCE=400 \
-                 TMP_DIR="\$TMPDIR" \
-			   CREATE_INDEX=false \
-			   ASSUME_SORT_ORDER=coordinate \
-         VALIDATION_STRINGENCY=LENIENT
+  java -jar -Xmx32g \$PICARDJAR MarkDuplicatesWithMateCigar \
+               I=allREADS.bam \
+               O=${name}.allReads.bam \
+               PG=Picard2.9.2_MarkDuplicates \
+               M=${name}.MDmetrics.txt \
+               MINIMUM_DISTANCE=400 \
+               TMP_DIR="\$TMPDIR" \
+		   CREATE_INDEX=false \
+		   ASSUME_SORT_ORDER=coordinate \
+       VALIDATION_STRINGENCY=LENIENT
 
   samtools index ${name}.allReads.bam
 
@@ -234,9 +227,6 @@ process gatherITROutputs {
   publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true, pattern: '*txt'
   publishDir "${params.outdir}/bam",     mode: 'copy', overwrite: true, pattern: '*bam*'
   publishDir "${params.outdir}/bed",     mode: 'copy', overwrite: true, pattern: '*bed*'
-
-  cpus 4
-  memory '12 GB'
 
   tag {bam}
 
@@ -325,11 +315,7 @@ process makeSSreport {
 
   publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true
 
-  cpus 1
-  memory '4 GB'
-
   tag {bam}
-  time '3h'
 
   input:
   tuple path(bam), path(bai)
@@ -350,11 +336,7 @@ process multiQCssds {
 
   publishDir "${params.outdir}/reports", mode: 'copy', overwrite: true
 
-  cpus 1
-  memory '4 GB'
   tag {reports}
-
-  time '1h'
 
   input:
   path(reports)

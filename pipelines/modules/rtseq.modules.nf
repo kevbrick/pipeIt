@@ -1,17 +1,6 @@
 process getCoverage {
-  echo true
-  cpus 2
-
-  memory '32 GB'
-
-  time { 3.hour * task.attempt}
-
-  errorStrategy { 'retry' }
-  maxRetries 1
 
   tag { chrom }
-
-  //publishDir params.outdir,  mode: 'copy', overwrite: false
 
   input:
   path(bam)
@@ -90,13 +79,6 @@ process getCoverage {
   }
 
 process mergeCoverageBedgraphs {
-  echo true
-  cpus 2
-  memory '16 GB'
-  time '2h'
-
-  errorStrategy { 'retry' }
-  maxRetries 1
 
   publishDir "${params.outdir}/bedgraph",  mode: 'copy', overwrite: true, pattern: '*bedgraph'
   publishDir "${params.outdir}/fig",       mode: 'copy', overwrite: true, pattern: '*pdf'
@@ -139,16 +121,6 @@ process mergeCoverageBedgraphs {
 
 // these are for generating GC files
 process generateMpileup {
-
-  echo true
-  cpus 2
-
-  memory '32 GB'
-
-  time { 9.hour * task.attempt}
-
-  errorStrategy { 'retry' }
-  maxRetries 2
 
   tag { chrom }
 
@@ -206,14 +178,6 @@ process generateMpileup {
   }
 
 process getGCstats {
-  echo true
-  cpus 2
-  memory '32 GB'
-
-  time '1h'
-
-  errorStrategy { 'retry' }
-  maxRetries 1
 
   publishDir "${params.outdir}/tables",  mode: 'copy', overwrite: true, pattern: '*DS.tab'
   publishDir "${params.outdir}/tables",  mode: 'copy', overwrite: true, pattern: '*table.tab'

@@ -146,7 +146,12 @@ for my $pipeType(split(/,/,$pipeList)){
 	if ($pipeType =~ /hic/){
 		if ($pipeType =~ s/(hic):([^\:]+):([^\:]+)/$1/){
 			($restrictionEnzyme,$phased) = (uc($2),($3 eq "phased")?1:0);
-			print STDERR "## ALERT: PHASED Hi-C pipeline is ONLY configured for B6 x CAST \n";
+			if ($phased){
+				print STDERR "## ALERT: PHASED Hi-C pipeline is ONLY configured for B6 x CAST \n";
+				if ($genome !~ /mm10_nCAST/){
+					$errMSG .= "Phased HiC is only configured to be used with --genome mm10_nCAST [NOT $genome]. Please modify --genome argument.\n"
+				}
+			}
 		}
 
 		if (uc($restrictionEnzyme) =~ /^MBO[I1]$/){
@@ -203,11 +208,18 @@ for my $pipeType(split(/,/,$pipeList)){
 	}
 
 	## SET NEXTFLOW PROFILES
+	## USE profiles to import configs for each pipe
 	my $profiles;
 	$profiles .= ",modules"     if ($useModules);
 	$profiles .= ",singularity" if (!$useModules || $isNFCORE);
 	$profiles .= ",local"       if ($runLocal);
   $profiles .= ",slurm"       if (!$runLocal);
+
+	$profiles   .= ",ssds"     if ($pipeType =~ /ssds/);
+	$profiles   .= ",align"    if ($pipeType =~ /(bwa|bwaaln|mm2|bowtie)/);
+	$profiles   .= ",rtseq"    if ($pipeType =~ /^rtseq$/);
+	$profiles   .= ",hic4dn"   if ($pipeType =~ /(hic)/);
+	$profiles   .= ",commitFQ" if ($pipeType =~ /(commit)/);
 
 	## Allow custom profiles (this can break things too though!)
 	$profiles .= ",$nxfProfiles" if ($nxfProfiles);
@@ -311,7 +323,7 @@ for my $pipeType(split(/,/,$pipeList)){
 	}
 
   ## get pipeline and ARGS
-	my ($nextFlowPipe, $pipeArgs) = whatPipe($bam,$fqR1,$fqR2,$objectStoreRegex,$SRAIDs,$pipeType,$PEorSR);
+	my ($nextFlowPipe, $pipeArgs) = whatPipe($bam,$fqR1,$fqR2,$objectStoreRegex,$SRAIDs,$pipeType,$PEorSR,$runFolder);
 
 	system('mkdir '.$runFolder);
 
@@ -393,7 +405,7 @@ for my $pipeType(split(/,/,$pipeList)){
 			$cmdOK++;
 		}
 
-		if (!$cmdOK && ($inputSize > 60 || $runLonger || $isNFCORE)){
+		if (!$cmdOK && ($inputSize > 60 || $pipeType =~ /hic/ || $runLonger || $isNFCORE)){
 			#system("sbatch --mail-type=BEGIN,TIME_LIMIT_90,END -J P.".$randName." --ntasks=".($runLocal?"16":"1")." --mem=".($runLocal?"32":"32")."g --gres=lscratch:800 ".$dependency." --time=".($sBatchTime?$sBatchTime:"96:03:00")." --partition=norm $outScript");
 			$pipeExec = "sbatch --mail-type=BEGIN,TIME_LIMIT_90,END -J nx.".$randName." --ntasks=".($runLocal?"16":"1")." --mem=".($runLocal?"32":"32")."g --gres=lscratch:800 ".$dependency." --time=".($sBatchTime?$sBatchTime:"96:03:00")." --partition=norm $outScript";
 			$cmdOK++;
@@ -446,7 +458,7 @@ for my $pipeType(split(/,/,$pipeList)){
 
 ########################################################################
 sub whatPipe{
-	my ($wBAM,$wFQ1,$wFQ2,$objRegex,$mySRA,$type,$peORsr) = @_;
+	my ($wBAM,$wFQ1,$wFQ2,$objRegex,$mySRA,$type,$peORsr,$runFolder) = @_;
 
 	## Figure out what pipeline to use
 	#  Returns the path to the nextflow pipeline
@@ -460,7 +472,7 @@ sub whatPipe{
 	$pipeNF = $ENV{DSL2DIR}.'/pipelines/hic4dn.nf'   if ($type =~ /^hic$/);
 
   ## Allow nf-core pipelines
-	$pipeNF = 'nf-core/methylseq' if ($type =~ /^methyl$/);
+	$pipeNF = 'nf-core/methylseq -r 1.5 ' if ($type =~ /^methyl$/);
 	#$pipeNF = 'nf-core/hic'       if ($type =~ /^microc$/);
 	#$pipeNF = 'nf-core/hic'       if ($type =~ /^hic$/);
 	#$pipes{uBAM}     = $ENV{DSL2DIR}.'/pipelines/archive.nf';
@@ -475,10 +487,16 @@ sub whatPipe{
 		##            i.e. Sample1_R{1,2}.fastq.gz can cause issues because it doesn't like text before the R{1,2} string !!!
 		##            Odd behaviour, but we need to work with it. For nf-core, symlinks to fqs now go to run folder ...
 		#my $readsWCString = $wFQ1; $readsWCString =~ s/R1/\R\{1\,2\}/;
-		my $readsWCString = '*R{1,2}.fastq.gz';
+		my $readsWCString = 'R{1,2}.fastq.gz';
 
-		$pArgs .= " --input \'$readsWCString\' " ;
-		$pArgs .= " --name $outName --outdir $outDir/$outName " ;
+		#KB 04-28-21: Modified for newer nf-core pipelines
+		#$pArgs .= " --input \'$readsWCString\' " ;
+		if ($pipeNF =~ /methylseq/){
+			$pArgs .= " --reads \'$runFolder\/$readsWCString\' " ;
+		}else{
+			$pArgs .= " --input \'$runFolder\/$readsWCString\' " ;
+		}
+		$pArgs .= " --outdir $outDir " ;
 
 		if ($type =~ /methyl/){
 			$pArgs .= ' --aligner bwameth ';

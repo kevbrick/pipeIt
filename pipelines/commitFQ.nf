@@ -42,7 +42,7 @@ params.fq1            = ''
 params.fq2            = ''
 params.extra_args     = ''
 params.gzipoutput     = true
-params.sortFQ         = true
+params.sortFQ         = false
 
 def isPE              = params.pe
 
@@ -84,29 +84,24 @@ log.info "===================================================================="
 log.info ""
 
 // import modules for pipeline
-include { SRAtoFQ; BAMtoFQ; OBJtoFQ; FQtoFQsr; FQtoFQpe; mergeFQ; fastqC; commitToObj} \
-  from "${baseDir}/modules/getFQ.modules.nf"
+include { getFQs; commitToObj} from "${projectDir}/modules/getFQ.modules.nf" \
+  params(inputType: inputType, \
+         genome: params.genome, \
+         outdir: params.outdir , \
+         bam: params.bam , \
+         sra: params.sra, \
+         obj: params.obj, \
+         fq1: params.fq1 , \
+         fq2: params.fq2, \
+         name: params.name, \
+         sortFQ: params.sortFQ, \
+         gzipoutput: params.gzipoutput, \
+         genomes2screen: params.genomes2screen)
 
 // OK ... let's start
 workflow {
-  switch (inputType) {
-    case 'sra':
-      SRAtoFQ(params.sra) |mergeFQ
-      break
-    case 'bam':
-      BAMtoFQ(file(params.bam)) |mergeFQ
-      break
-    case 'obj':
-      OBJtoFQ(params.obj) |mergeFQ
-      break
-    case 'fqsr' :
-      FQtoFQsr(file(params.fq1)) |mergeFQ
-      break
-    case 'fqpe' :
-      FQtoFQpe(file(params.fq1),file(params.fq2)) |mergeFQ
-      break
-  }
+  fastq = getFQs()
 
-  commitToObj(mergeFQ.out.fqs)
+  commitToObj(fastq.fq)
 
   }

@@ -65,6 +65,8 @@ params.blacklist      = ''
 params.genomes2screen = 'mm10,hg38,univec'
 params.gzipoutput     = true
 params.sortFQ         = false
+params.justPairs      = false
+params.saveAllPairs   = true
 
 // KB 03-14-2021: Use igenomes by default; use NXF_GENOMES if igenomes is not available
 def bwaidx  = params.genomes["${params.genome}"]?params.genomes["${params.genome}"]["bwa"]:"\$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa"
@@ -92,14 +94,16 @@ log.info "FASTQ split size = ${params.splitSz}"
 log.info "=========================================================================================\n"
 
 // import modules for pipeline
-include { bwa4D; pairsam; mergesampairs ; pairsQC; merge_biological_replicates;
+include { bwa4D; pairsam; mergepairs_dedup ; pairsQC; mergepairs_nodedup;
           get_RE_file; addfrag2pairs; run_cooler;
           run_juicebox_pre; cool2multirescool; hicnormvector_to_mcool ;
           bowtie2_end2end; trim_hic_reads; bowtie2_on_trimmed_reads;
           bowtie2_mergeR1R2; bowtie2_make_paired_bam;
           fixMDtags; markAlleleOfOrigin; splitByPhase;
+          pairs_to_bam; clean_dnase_bam; make_mnase_bigwig ;
           pairtools_stats; multiqc ; filter_pairs; concatenate_phasing_reports;
-          balance_cool_matrix; call_compartments_from_cool} from "./modules/4dnucleome.modules.nf" \
+          concatenate_allelicstatus_reports; balance_cool_matrix;
+          call_compartments_from_cool } from "./modules/4dnucleome.modules.nf" \
   params(bwaidx: bwaidx, \
          bt2idx: bt2idx, \
          re: params.re, \
@@ -109,6 +113,7 @@ include { bwa4D; pairsam; mergesampairs ; pairsQC; merge_biological_replicates;
          dnase: params.dnase, \
          phased: params.phased, \
          saveBAM: params.saveBAM, \
+         saveAllPairs: params.saveAllPairs, \
          vcf: params.vcf, \
          blacklist: params.blacklist, \
          ligation_site: params.ligationsite)
@@ -208,57 +213,57 @@ workflow {
   if (params.phased){
     println("PHASING")
     fixMD = fixMDtags(aln)
-    dedup = markAlleleOfOrigin(fixMD.bam)
+    bamMDOK = markAlleleOfOrigin(fixMD.bam)
   }else{
-    dedup = fixMDtags(aln)
+    bamMDOK = fixMDtags(aln)
   }
 
   // MAKE INITIAL PAIRS FILE
-  bamPair     = pairsam(dedup.bam)
+  initPairs = pairsam(bamMDOK.bam)
 
   if (params.phased){
-    samPEall    = mergesampairs(bamPair.pairs.groupTuple(by: [0,1,2]))
+    samPEall    = mergepairs_dedup(initPairs.pairs.groupTuple(by: 0))
     samPEphased = splitByPhase(samPEall)
     samPEpair   = samPEall.mix(samPEphased.pairs)
   }else{
-    samPEpair   = mergesampairs(bamPair.pairs.groupTuple(by: [0,1,2]))
+    samPEpair   = mergepairs_dedup(initPairs.pairs.groupTuple(by: 0))
   }
 
   // COLLAPSE SEQUENCING REPLICATES & SPLITFQs INTO A TUPLE
   allPairFilesForStats = samPEpair.transpose().map {row ->
-                   def type = row[2].name.replaceFirst("^.+\\.(all|hom1|hom2|hom|het)\\.pairs.+\$",'$1')
-                   return [ "${row[0]}.${type}",  "${row[1]}.${type}", row[2]]}
-                .groupTuple(by: [0,1])
+                  def type = row[1].name.replaceFirst("^.+\\.(all|hom1|hom2|hom|het)\\.pairs.+\$",'$1')
+                  return [ "${row[0]}.${type}",  row[1]]}
+               .groupTuple(by: 0)
 
   // GET SOME PAIRS STATS
   samPEreport    = pairtools_stats(allPairFilesForStats)
 
+  // COLLAPSE SEQUENCING REPLICATES & SPLITFQs INTO A TUPLE
   allPairFiles = samPEpair.transpose().map {row ->
-                   def type = row[2].name.replaceFirst("^.+\\.(all|hom1|hom2|hom|het)\\.pairs.+\$",'$1')
-                   return [ "${row[0]}.${type}",  "${row[1]}.${type}", row[2], row[3]]}
-                .groupTuple(by: [0,1])
+                   def type = row[1].name.replaceFirst("^.+\\.(all|hom1|hom2|hom|het)\\.pairs.+\$",'$1')
+                   return [ "${row[0]}.${type}",  row[1], row[2]]}
+                .groupTuple(by: 0)
 
-  filtered_pairs = filter_pairs(allPairFiles)
-
-  //se.groupTuple(by: 0).view()
+  //Add frags to hic files (not dnase)
   if (params.dnase){
-    validpairs   = merge_biological_replicates(filtered_pairs.groupTuple(by: 0))
+    validpairs  = mergepairs_nodedup(allPairFiles) | filter_pairs
   }else{
-    validpairs   = merge_biological_replicates(filtered_pairs.groupTuple(by: 0)) | combine(re) | addfrag2pairs
+    validpairs  = mergepairs_nodedup(allPairFiles)| combine(re) | addfrag2pairs | filter_pairs
   }
 
-  cool    = run_cooler(validpairs)
-  balcool = balance_cool_matrix(cool)
-  coolM   = cool2multirescool(cool)
+  if (!params.justPairs){
+    cool    = run_cooler(validpairs)
+    balcool = balance_cool_matrix(cool)
+    coolM   = cool2multirescool(cool)
 
-  hic     = run_juicebox_pre(validpairs)
-
-  hicool  = hicnormvector_to_mcool(cool.join(hic))
+    hic     = run_juicebox_pre(validpairs)
+    hicool  = hicnormvector_to_mcool(cool.join(hic))
+  }
 
   // Reports
   if (params.phased){
-    dedup.report.view()
-    phasingReport = concatenate_phasing_reports(dedup.report.mix(samPEphased.report).groupTuple(by: 0))
+    phasingReport = concatenate_phasing_reports(bamMDOK.report.mix(samPEphased.report).groupTuple(by: 0))
+    allelicReport = concatenate_allelicstatus_reports(bamMDOK.rep.groupTuple(by: 0))
   }
 
   if (params.ss){
@@ -275,7 +280,56 @@ workflow {
     }
   }
 
-  //rep.view()
-
   multiqc(rep.collect())
+
+  //
+  // // MAKE INITIAL PAIRS FILE
+  // bamPair     = pairsam(dedup.bam)
+  //
+  // if (params.phased){
+  //   samPEall    = mergepairs_dedup(bamPair.pairs.groupTuple(by: 0))
+  //   samPEphased = splitByPhase(samPEall)
+  //   samPEpair   = samPEall.mix(samPEphased.pairs)
+  // }else{
+  //   samPEpair   = mergepairs_dedup(bamPair.pairs.groupTuple(by: 0))
+  // }
+  //
+  // // COLLAPSE SEQUENCING REPLICATES & SPLITFQs INTO A TUPLE
+  // allPairFilesForStats = samPEpair.transpose().map {row ->
+  //                  def type = row[2].name.replaceFirst("^.+\\.(all|hom1|hom2|hom|het)\\.pairs.+\$",'$1')
+  //                  return [ "${row[0]}.${type}",  "${row[1]}.${type}", row[2]]}
+  //               .groupTuple(by: [0,1])
+  //
+  // // GET SOME PAIRS STATS
+  // samPEreport    = pairtools_stats(allPairFilesForStats)
+  //
+  // // GENERATE DNase BAM & WIG files for DNase-HiC
+  // if (params.dnase){
+  //   pairs_to_bam(allPairFilesForStats) | clean_dnase_bam | make_mnase_bigwig
+  // }
+  //
+  // allPairFiles = samPEpair.transpose().map {row ->
+  //                  def type = row[2].name.replaceFirst("^.+\\.(all|hom1|hom2|hom|het)\\.pairs.+\$",'$1')
+  //                  return [ "${row[0]}.${type}",  "${row[1]}.${type}", row[2], row[3]]}
+  //               .groupTuple(by: [0,1])
+  //
+  // filtered_pairs = filter_pairs(allPairFiles)
+  //
+  // //se.groupTuple(by: 0).view()
+  // if (params.dnase){
+  //   validpairs   = mergepairs_nodedup(filtered_pairs.groupTuple(by: 0))
+  // }else{
+  //   validpairs   = mergepairs_nodedup(filtered_pairs.groupTuple(by: 0)) | combine(re) | addfrag2pairs
+  // }
+  //
+  // if (!params.justPairs){
+  //   cool    = run_cooler(validpairs)
+  //   balcool = balance_cool_matrix(cool)
+  //   coolM   = cool2multirescool(cool)
+  //
+  //   hic     = run_juicebox_pre(validpairs)
+  //
+  //   hicool  = hicnormvector_to_mcool(cool.join(hic))
+  // }
+
 }
