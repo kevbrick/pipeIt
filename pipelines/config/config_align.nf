@@ -31,6 +31,14 @@ process {
     container = "$DSL2DIR/singularity/RDCO.sif"
   }
 
+  withLabel: mergeBAMsv2{
+    cpus = { 8 }
+    memory = { 32.GB }
+    //Defined in process
+    //time = { 2.hour * task.attempt * process_length_factor }
+    container = "$DSL2DIR/singularity/RDCO.sif"
+  }
+
   withName:getPicardMetrics{
     cpus = { 4 }
     memory = { 16.GB }

@@ -131,14 +131,14 @@ process mergeFQ {
   // This also speeds things up quite a bit
   """
   if [ "${type}" == "gz" ]; then
-    if [ "${multiR1}" eq "null"]; then
+    if [ "${multiR1}" == "null" ]; then
       ln -s ${R1} ${name}.R1.fastq.gz
     else
       cat ${R1} >${name}.R1.fastq.gz
     fi
 
     if [ ! -z "${R2}" ]; then
-      if [ "${multiR2}" eq "null"]; then
+      if [ "${multiR2}" == "null" ]; then
         ln -s ${R2} ${name}.R2.fastq.gz
       else
         cat ${R2} >${name}.R2.fastq.gz

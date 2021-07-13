@@ -75,7 +75,7 @@ workflow {
 
   //annot.view()
 
-  sample_sheet.groupTuple(by: 0).view()
+  //sample_sheet.groupTuple(by: 0).view()
 
   replicateBAMs = mergeBAMsv2(sample_sheet.groupTuple(by: 0))
   mdBAM         = markBAMduplicates(replicateBAMs)

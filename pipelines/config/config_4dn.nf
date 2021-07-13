@@ -99,7 +99,7 @@ process {
   withName:splitByPhase{
     cpus = { 4 }
     memory = { 16.GB }
-    time = { 6.hour * task.attempt * process_length_factor }
+    time = { 48.hour * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 

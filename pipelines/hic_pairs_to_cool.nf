@@ -72,7 +72,7 @@ log.info "======================================================================
 include { mergepairs_nodedup as mergepairs_tech_replicates;
           mergepairs_nodedup as mergepairs_bio_replicates;
           mergepairs_dedup;
-          get_RE_file; run_cooler;
+          get_RE_file; addfrag2pairs; run_cooler;
           run_juicebox_pre; cool2multirescool;
           hicnormvector_to_mcool ;
           pairtools_stats; multiqc ;
@@ -104,6 +104,17 @@ workflow {
              def pairs                = file("${row['Pairs']}")
              return [ sample, techrep, biorep, pairs ]}
 //             return [ id, sample, biological_replicate, pairs ]}
+
+  // Get RE file (if available) ... otherwise, make one
+  if (params.dnase){
+    re = Channel.fromPath('none.txt')
+  }else{
+    if (params.refile){
+      re = Channel.fromPath(params.refile)
+    }else{
+      re = get_RE_file()
+    }
+  }
 
   //println("${params.ss}")
   //samplesheet.view()

@@ -260,7 +260,7 @@ process mergeBAM {
 
   time { bams[0].size() < 200000000 ? 6.hour : bams[0].size()/200000000 * task.attempt * 6.hour }
 
-  tag { bams.size() }
+  tag { bams }
   input:
   path(bams)
 

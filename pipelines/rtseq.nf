@@ -23,7 +23,7 @@ if (params.help) {
   log.info " --obj               <Sample name regex for RDCO object store>"
   log.info " --pe                pass arg if paired-end (required for --sra or --obj)"
   log.info " --genome            Name of genome reference (mm10|hg38|canFam3 are the ONLY options) "
-  log.info " --gcCorrectionFile  GC calibration file (choose one from accessoryFiles/gcCalibration) "
+  log.info " --gcCorrection      GC calibration file (choose one from accessoryFiles/gcCalibration) "
   log.info " -                   If omitted, pipeline will generate a calibration file from the file "
   log.info " -                   provided. This is a time-consuming step. "
   log.info " --name              <string default=bam file stem> "
@@ -40,11 +40,12 @@ if (params.help) {
 params.name             = 'ssds_test_output'
 params.genome           = ''
 params.genomes2screen   = 'mm10,hg38,rn6,sacCer3,canFam3,monDom5,ecoli,bsub214,phiX,UniVec'
-params.gcCorrectionFile = ""
+params.gcCorrection     = "HiSeqX"
 params.splitSz          = 20000000
 params.aligner          = "bwa"
 params.pe               = true
 params.outdir           = "out"
+params.covPC            = "66" // Each bin in final bedgraph must have at least x% of bases with coverage
 params.sra              = ''
 params.obj              = ''
 params.bam              = ''
@@ -53,33 +54,31 @@ params.fq1              = ''
 params.fq2              = ''
 params.extra_args       = ''
 params.gzipoutput       = false
+params.test             = false
+params.sortFQ           = false
 params.skipAlignment    = false
 
-params.accessoryDir     = "$NXF_PIPEDIR/accessoryFiles/rtSeq"
-params.rtData           = "${params.accessoryDir}/${params.genome}"
+//params.accessoryDir     = "$NXF_PIPEDIR/accessoryFiles/rtSeq"
+params.accessoryDir     = "/usr/local/rtseq" // location in docker container
+params.rtData           = "${params.accessoryDir}"
 params.genome_mask_fa   = "${params.rtData}/genomeMASK/genome.fa"
-params.pseudoReadBase   = "${params.rtData}/pseudoreads/"
+params.pseudoReadBase   = "${params.rtData}/mapability/"
 
-if (params.bam){
-  inputBam = params.bam
-  inputBai = params.bai?params.bai:"${params.bam}.bai";
-}
+params.genome_fasta   = params.genome?"$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa":""
+params.genome_fai     = params.genome?"$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa.fai":""
+params.genome_bwaidx  = params.genome?"$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa":""
 
 def isPE                = params.pe
 
 if (params.fq1 && params.fq2){
   if (!isPE){println("** WARNING ** FQ1 and FQ2 provided !! assuming PE, despite --pe false ....")}
   isPE             = true
-}
+  }
 
 if (params.fq1 && !params.fq2){
   if (isPE){println("** WARNING ** FQ2 NOT provided !! assuming SR, despite --pe true ....")}
   isPE             = false
-}
-
-params.genome_fasta   = params.genome?"$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa":""
-params.genome_fai     = params.genome?"$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa.fai":""
-params.genome_bwaidx  = params.genome?"$NXF_GENOMES/${params.genome}/BWAIndex/version0.7.10/genome.fa":""
+  }
 
 def inputType
 if (params.sra){inputType = 'sra'}
@@ -99,13 +98,20 @@ if (params.name){
 def outname = oname.replaceFirst(".bwaMem(SR|PE).+",".RTseq")
 def outName = "${outname}.${params.genome}"
 
+log.info "bam               : ${params.bam}"
+log.info "sa               : ${params.skipAlignment}"
+
+def skipAlignment = params.bam ? true : false
+
+log.info "sa               : ${skipAlignment}"
+
 //log.info
 log.info "===================================================================="
 log.info "RT-Seq PIPELINE 2.0 : Align and infer RT       "
 log.info "===================================================================="
 log.info "name               : ${params.name}"
 log.info "outdir             : ${params.outdir}"
-log.info "GC-correction file : ${params.gcCorrectionFile} "
+log.info "GC-correction file : ${params.gcCorrection} "
 log.info "ref genome         : ${params.genome}"
 log.info "genome fasta       : ${params.genome_fasta}"
 log.info "genome idx         : ${params.genome_fai}"
@@ -116,11 +122,14 @@ if (params.obj){log.info "obj                : ${params.obj}"}
 if (params.fq1){log.info "fq1                : ${params.fq1}"}
 if (params.fq2){log.info "fq2                : ${params.fq2}"}
 
-if (!params.skipAlignment){
+if (!skipAlignment){
   if (params.aligner =~ "bwa")   {log.info "bwa index          : ${params.genome_bwaidx}"}
   log.info isPE?"sequencing type    : paired-end":"sequencing type    : single-end"
   log.info "FQ split size      : ${params.splitSz}"
   log.info "FQ screen genomes  : ${params.genomes2screen}"
+  log.info "Skip alignment     : ${params.skipAlignment}"
+}else{
+  log.info "** BAM provided: Skipping alignment step "
 }
 
 log.info "--------------------------------------------------------------------"
@@ -157,7 +166,7 @@ include { alignFromFQ; makeDeeptoolsBW; makeFRBW; samStats } from "${baseDir}/mo
 
 include { multiQC } from "${baseDir}/modules/generalRDCO.modules.nf"
 
-include { getCoverage; mergeCoverageBedgraphs; generateMpileup; getGCstats } from "${baseDir}/modules/rtseq.modules.nf" \
+include { getCoverage; mergeCoverageBedgraphs; generateMpileup; getGCstats ; getGCcorrFile} from "${baseDir}/modules/rtseq.modules.nf" \
     params(name: params.name, \
            outdir: params.outdir, \
            accessoryDir: params.accessoryDir, \
@@ -166,24 +175,24 @@ include { getCoverage; mergeCoverageBedgraphs; generateMpileup; getGCstats } fro
            genome: params.genome, \
            genome_fasta: params.genome_fasta, \
            genome_fai: params.genome_fai, \
-           test: params.genome_test, \
-           fullChromTest: params.fullChromTest, \
+           test: params.test, \
+           fullChromTest: params.test, \
+           sortFQ: params.sortFQ, \
            pseudoReadBase: params.pseudoReadBase,
-           genome_mask_fa: params.genome_mask_fa)
+           gcCorrection: params.gcCorrection,
+           genome_mask_fa: params.genome_mask_fa,
+           covPC: params.covPC)
 
 // Get chromosomes //////////////////////////////////
 if( params.test ){
     log.info "======== Using TEST chromosomes : 17-19 & X ============================="
     if (params.genome == 'hg38'){
-      Channel.from('chr20')
-             .into {chromNames; chromNames2}
+      chromNames = Channel.from('chr20')
     }else{
       if (params.genome == 'mm10'){
-        Channel.from('chr17','chr18','chr19','chrX')
-             .into {chromNames; chromNames2}
+        chromNames = Channel.from('chr18','chr19')
       }else{
-        Channel.from('chr10','chr11')
-             .into {chromNames; chromNames2}
+        chromNames = Channel.from('chr10','chr11')
       }
     }
   }else{
@@ -196,68 +205,48 @@ if( params.test ){
         println("Skipping ... ")
       }else{
         chromosomeNames << cs;
-        log.info "${cs}";
+        //log.info "${cs}";
       }
     }
 
     chromNames = Channel.from(chromosomeNames)
-
-  }
-
-// Alignment
-workflow doAlignment{
-  fastqs = getFQs()
-  aln    = alignFromFQ(fastqs.fq)
-
-  mqcRep = multiQC(fastqs.fqc.merge(fastqs.fqscr,
-                                    aln.repMD,
-                                    aln.repST,
-                                    aln.repDT,
-                                    aln.repAln))
-
-  emit:
-  bam = aln.bam
-
-  }
-
-// Generate GC correction file from coverage
-workflow makeGCcorrectionFile{
-  take:
-  path(bam)
-  path(bai)
-
-  main:
-  gcCorr = generateMpileup(bam, bai, chromNames) | collect | getGCstats
-
-  emit:
-  tab = gcCorr.correctionTab
-
   }
 
 // OK ... let's start
 workflow {
   //Do alignment if necessary
-  if (params.skipAlignment){
-    bam = Channel.fromPath(inputBam).ifEmpty { exit 1, "BAM file not found" }
-    bai = Channel.fromPath(inputBai).ifEmpty { exit 1, "BAM index file not found" }
+  if (skipAlignment){
+    bam = Channel.value(params.bam)
+           .map{ b -> [file("$b"), file("${b}.bai") ] }
+
+    bam.view()
+
+    printf('NOT Aligning !!!')
+
   }else{
-    aln = doAlignment()
+    fastqs = getFQs()
+    aln    = alignFromFQ(fastqs.fq)
+
+    mqcRep = multiQC(fastqs.fqc.merge(fastqs.fqscr,
+                                      aln.repMD,
+                                      aln.repST,
+                                      aln.repDT,
+                                      aln.repAln))
     bam = aln.bam
-    bai = aln.bai
   }
 
   //Get correction file if necessary
-  if (params.gcCorrectionFile){
-    corrFile = Channel
-               .fromPath(params.gcCorrectionFile)
-               .ifEmpty { exit 1, "Bias correction stat file not found" }
-               .set {correctionTab}
+  if (params.gcCorrection){
+    corrFile = getGCcorrFile()
   }else{
-    corrFile = makeGCcorrectionFile(bam,bai)
+    corrFile = generateMpileup(bam, chromNames) | collect | getGCstats
   }
-
-  // Get coverage
-  cov     = getCoverage(bam, bai, corrFile, chromNames)
-  mergeBG = mergeCoverageBedgraphs(cov.bg.collect(),
+  
+  bam.view()
+  
+  cov     = getCoverage(bam, corrFile, chromNames)
+  
+  mergeBG = mergeCoverageBedgraphs(outName,
+                                   cov.bg.collect(),
                                    cov.gcData.collectFile(name: 'allGCData.txt', newLine: true))
   }
