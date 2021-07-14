@@ -184,7 +184,7 @@ process commitToObj {
   cpus 1
   memory '6g'
 
-  time { 1.hour * task.attempt}
+  time { 5.hour * task.attempt}
   errorStrategy { 'retry' }
   maxRetries 1
 
