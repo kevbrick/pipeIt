@@ -1,4 +1,5 @@
 profiles {
+
   singularity {
     singularity.enabled = true
     singularity.autoMounts = true

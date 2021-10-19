@@ -137,7 +137,8 @@ process mergeFQ {
       cat ${R1} >${name}.R1.fastq.gz
     fi
 
-    if [ ! -z "${R2}" ]; then
+    #if [ ! -z "${R2}" ]; then
+    if [ "${R2}" != "input.2" ]; then
       if [ "${multiR2}" == "null" ]; then
         ln -s ${R2} ${name}.R2.fastq.gz
       else
@@ -147,7 +148,8 @@ process mergeFQ {
   else
     cat ${R1} |gzip -c >${name}.R1.fastq
 
-    if [ ! -z "${R2}" ]; then
+    #if [ ! -z "${R2}" ]; then
+    if [ "${R2}" != "input.2" ]; then
       cat ${R2} |gzip -c >${name}.R2.fastq
     fi
   fi
@@ -158,7 +160,8 @@ process mergeFQ {
       fastq-sort --id tmp.fq |gzip -c >${name}.R1.fastq.gz
       rm tmp.fq
 
-      if [ ! -z "${R2}" ]; then
+      #if [ ! -z "${R2}" ]; then
+      if [ "${R2}" != "input.2" ]; then
         gunzip -c ${name}.R2.fastq.gz >tmp.fq
         fastq-sort --id tmp.fq |gzip -c >${name}.R2.fastq.gz
         rm tmp.fq
@@ -168,7 +171,8 @@ process mergeFQ {
       mv R1.fastq ${name}.R1.fastq
       gzip ${name}.R1.fastq
 
-      if [ ! -z "${R2}" ]; then
+      #if [ ! -z "${R2}" ]; then
+      if [ "${R2}" != "input.2" ]; then
         fastq-sort --id ${name}.R2.fastq R2.fastq
         mv R2.fastq ${name}.R2.fastq
         gzip ${name}.R2.fastq
@@ -261,9 +265,17 @@ process fastqScreen {
   done
 
   for f in *.R1.fastq*; do
+    if [[ "\$f" =~ "q.gz" ]]; then
+      fqs=`echo \$f |perl -pi -e 's/(fq|fastq).gz/ds.fastq/' 2>/dev/null`
+      zcat \$f |head -n 4000000 |tail -n 400000 >\$fqs
+    else
+      fqs=`echo \$f |perl -pi -e 's/(fq|fastq)\$/ds.fastq/' 2>/dev/null`
+      cat \$f |head -n 4000000 |tail -n 400000 >\$fqs
+    fi
+    
     fastq_screen \
       --threads ${task.cpus} --force \
-      --aligner bwa \$f \
+      --aligner bwa \$fqs \
       --conf conf.txt
   done
   """
@@ -276,25 +288,26 @@ workflow getFQs {
     case 'sra':
       init  = SRAtoFQ(params.sra)
       fqs   = init.R1.join(init.R2, by: 0, remainder: true)
-      merge = mergeFQ(fqs) |fastqC |fastqScreen
+      merge = mergeFQ(fqs) | (fastqC & fastqScreen)
       break
     case 'bam':
       init  = BAMtoFQ(params.sra)
       fqs   = init.R1.join(init.R2, by: 0, remainder: true)
-      merge = mergeFQ(fqs) |fastqC |fastqScreen
+      merge = mergeFQ(fqs) | (fastqC & fastqScreen)
       break
     case 'obj':
       init  = OBJtoFQ(params.obj)
       fqs   = init.R1.join(init.R2, by: 0, remainder: true)
-      merge = mergeFQ(fqs) |fastqC |fastqScreen
+      merge = mergeFQ(fqs) | (fastqC & fastqScreen)
       break
     case 'fqsr' :
       fqs = Channel.from(params.fq1 =~ /gz/ ? 'gz' : 'fastq',file(params.fq1)).collect()
-      merge = mergeFQ(fqs) |fastqC |fastqScreen
+      fqs.view()
+      merge = mergeFQ(fqs) | (fastqC & fastqScreen)
       break
     case 'fqpe' :
       fqs = Channel.from(params.fq1 =~ /gz/ ? 'gz' : 'fastq',file(params.fq1),file(params.fq2)).collect()
-      merge = mergeFQ(fqs) |fastqC |fastqScreen
+      merge = mergeFQ(fqs) | (fastqC & fastqScreen)
       break
   }
 

@@ -11,6 +11,7 @@ my $opts = $#ARGV;
 GetOptions ('bam=s'        => \(my $bam),
             'f1=s'         => \(my $fqR1),
             'f2=s'         => \(my $fqR2),
+						'dir=s'        => \(my $dir), ## Can include wildcards,
             'g=s'          => \(my $genome),
             'obj=s'        => \(my $objectStoreRegex),
             'sra=s'        => \(my $SRAIDs),
@@ -53,6 +54,7 @@ GetOptions ('bam=s'        => \(my $bam),
 my $todayDate = getTodayDate();
 
 my ($restrictionEnzyme, $hic_ligation_site, $hic_restriction_site, $dnase, $phased);
+my ($ss_data);
 
 ## KB 7/19/18 - run each NF instance in subfolder
 ## Get start folder and set output folder full path if required
@@ -72,8 +74,9 @@ if ($help || $extraHelp || $opts < 1){
 
 my $errMSG;
 $errMSG .= 'pipeIt cannot be run from your /home folder. Please use either /data/{user} or /data/RDCO ...'."\n" if (!$homeOK && (`pwd` =~ /(home|\~)/ && `pwd` =~ /($ENV{USER})/));
-$errMSG .= 'Too many input options specified ... pick one. '."\n" if ((defined($bam) + defined($fqR1) + defined($objectStoreRegex) + defined($SRAIDs)) > 1);
-$errMSG .= 'No BAM or FASTQ file(s) provided.'."\n" unless ($bam || $fqR1 || $objectStoreRegex || $SRAIDs || $missingBAMok);
+$errMSG .= 'Too many input options specified ... pick one. '."\n" if ((defined($bam) + defined($fqR1) + defined($objectStoreRegex) + defined($SRAIDs)) + defined($dir)) > 1);
+$errMSG .= 'No BAM or FASTQ file(s) provided.'."\n" unless ($bam || $fqR1 || $objectStoreRegex || $SRAIDs || $missingBAMok || $dir);
+$errMSG .= "Invalid folder or files specified for sample-sheet [--dir \"$dir\"]"."\n"    if ($dir && !is_valid_Regex($dir,\$ss_data));
 $errMSG .= "BAM file does not exist [--bam $bam]"."\n"    if (not($missingBAMok) && $bam && not (-e $bam));
 $errMSG .= "SRA names are incorrect (must begin with SRR / DRR / ERR) [--sra $SRAIDs]"."\n"      if ($SRAIDs && !(sraOK($SRAIDs)));
 $errMSG .= "Config file specified but does not exist [--config $configFile]"."\n"    if ($configFile && not (-e $configFile));
@@ -109,21 +112,6 @@ if ($pipeList =~ /rtseq/i){
 	}
 }
 
-if ($genome eq 'guess'){
-	my $inFileName;
-	$inFileName = $bam  if ($bam);
-	$inFileName = $fqR1 if ($fqR1);
-
-	$genome = guessGenome($inFileName);
-	$errMSG .= "Genome GUESS failed .... [$inFileName]\nGenome is required (--g)\n" unless ($genome);
-}else{
-	#$genome = guessGenome(".".$genome.".");
-	$errMSG .= 'Genome is required (--g)'."\n" unless ($genome);
-}
-
-## KB 181128
-$errMSG .= 'Genome NOT found (--g $genome)'."\n" unless (-d ($ENV{NXF_GENOMES}.'/'.$genome));
-
 ## KB 190108: Allow multiple pipes
 my $initialOutDir = $outDir;
 for my $pipeType(split(/,/,$pipeList)){
@@ -135,20 +123,22 @@ for my $pipeType(split(/,/,$pipeList)){
 	## Assure we don't keep renaming convention from a previous pipe
 	$outDir = $initialOutDir;
 
-	if ($pipeType =~ /^(bwa|bwaaln|mm2|bowtie|ssds|ssdsorig)$/){
+	if ($pipeType =~ /^(bwa|bwaaln|mm2|bowtie|ssds|ssdsv1|ssdsv2)$/){
 		$errMSG .= 'Invalid split Size (--ssz). Please provide a number ... '."\n"    unless ($fastqSplitSize =~ /^\d+$/);
 		print STDERR 'Split size is very small (--ssz '.$fastqSplitSize.'). Please reconsider ... this will spawn LOTS of jobs if the BAM is large... '."\n" if ($fastqSplitSize < 5000000);
 	}
 
 	if ($SRAIDs){
-		if ($pipeType !~ /(bwa|mm2|ssds|ssdsorig|minimap|ont)/){
+		if ($pipeType !~ /(bwa|mm2|ssdsv1|ssdsv2|minimap|ont)/){
 			$errMSG .= 'SRA accessions are not yet supported for the '.$pipeType.' pipeline ... '."\n";
+			$errMSG .= 'For SSDS, please use --pipe ssdsv2 (equivalent to SSDS pipeline as-of Oct 17, 2021)'."\n" if ($pipeType =~ /ssds/);
 		}
 	}
 
 	if ($objectStoreRegex){
-		if ($pipeType !~ /(ssds|ssdsorig|bwa|mm2|ont|minimap|rtseq|bowtie|hic)/){
+		if ($pipeType !~ /(ssdsv1|ssdsv2|bwa|mm2|ont|minimap|rtseq|bowtie|hic)/){
 			$errMSG .= 'Alignment from object store is not yet supported for the '.$pipeType.' pipeline ... '."\n";
+			$errMSG .= 'For SSDS, please use --pipe ssdsv2 (equivalent to SSDS pipeline as-of Oct 17, 2021)'."\n" if ($pipeType =~ /ssds/);
 		}
 	}
 
@@ -187,17 +177,39 @@ for my $pipeType(split(/,/,$pipeList)){
 		$errMSG .= 'pipeit is not configured to run the hi-c pipeline with that enzyme ['.uc($restrictionEnzyme).'] ... Please talk to Kevin ...'."\n" unless ($dnase || $hic_ligation_site);
 	}
 
-	if ($errMSG){
-		printARGS($errMSG);
-		exit();
-	}
-
 	## SET isNFCORE FLag for nf-core pipelines
   my $isNFCORE = 0;
 
 	if ($pipeType =~ /^(methyl)$/){
 		print STDERR '## NOTE: Using an nf-core pipeline'."\n";
 		$isNFCORE = 1;
+	}
+	
+	if ($pipeType =~ /^(ssds)$/){
+		print STDERR '## NOTE: Using the SSDS nf-core pipeline'."\n";
+		$isNFCORE = 1;
+	}
+	
+	if (!$isNFCORE){
+		if ($genome eq 'guess'){
+			my $inFileName;
+			$inFileName = $bam  if ($bam);
+			$inFileName = $fqR1 if ($fqR1);
+
+			$genome = guessGenome($inFileName);
+			$errMSG .= "Genome GUESS failed .... [$inFileName]\nGenome is required (--g)\n" unless ($genome);
+		}else{
+			#$genome = guessGenome(".".$genome.".");
+			$errMSG .= 'Genome is required (--g)'."\n" unless ($genome);
+		}
+
+		## KB 181128
+		$errMSG .= 'Genome NOT found (--g $genome)'."\n" unless (-d ($ENV{NXF_GENOMES}.'/'.$genome));
+	}
+	
+	if ($errMSG){
+		printARGS($errMSG);
+		exit();
 	}
 
 	## KB 7/19/18 - replace relative with absoulte paths (Just to be safe)
@@ -224,7 +236,7 @@ for my $pipeType(split(/,/,$pipeList)){
 	$profiles .= ",local"       if ($runLocal);
   $profiles .= ",slurm"       if (!$runLocal);
 
-	$profiles   .= ",ssds"     if ($pipeType =~ /ssds/);
+	$profiles   .= ",ssds"     if ($pipeType =~ /ssdsv[12]/);
 	$profiles   .= ",align"    if ($pipeType =~ /(bwa|bwaaln|mm2|bowtie)/);
 	$profiles   .= ",rtseq"    if ($pipeType =~ /^rtseq$/);
 	$profiles   .= ",hic4dn"   if ($pipeType =~ /(hic)/);
@@ -308,10 +320,12 @@ for my $pipeType(split(/,/,$pipeList)){
 	my $randName              = $pipeType.'_'.$outName.'_'.timestamp();
 	my $runFolder             = $outDir.'/'.($workingDir?$workingDir:$randName).'/';
 	my $outScript             = $runFolder.($hiddenScripts?'.':'').$randName.'_pipeIt.sh';
-	my $outSampleSheet        = $runFolder.($hiddenScripts?'.':'').'SampleSheet_'.$randName.'.tab';
+	my $outSampleSheet        = $runFolder.($hiddenScripts?'.':'').'SampleSheet_'.$randName.'.csv';
 	my $outResumeScript       = $runFolder.($hiddenScripts?'.':'').'RESUME_'.$randName.'_pipeIt.sh';
 	my $outResumeScriptLocal  = $runFolder.($hiddenScripts?'.':'').'local_RESUME_'.$randName.'_pipeIt.sh';
 
+	system('mkdir '.$runFolder);
+	
 	#my $workFolder = $runFolder.'work_'.$outName;
 	my $workFolder = $runFolder.'work';
 
@@ -332,14 +346,12 @@ for my $pipeType(split(/,/,$pipeList)){
 	}
 
   ## get pipeline and ARGS
-	my ($nextFlowPipe, $pipeArgs) = whatPipe($bam,$fqR1,$fqR2,$objectStoreRegex,$SRAIDs,$pipeType,$PEorSR,$runFolder);
-
-	system('mkdir '.$runFolder);
+	my ($nextFlowPipe, $pipeArgs) = whatPipe($bam,$fqR1,$fqR2,$objectStoreRegex,$SRAIDs,$pipeType,$PEorSR,$runFolder,$ss_data,$outSampleSheet);
 
   ## 030821 KB:
 	## For nf-core pipelines, we want to have the fastqs in the run folder
 	## This sidesteps issues with parsing the input string (see whatPipe function)
-	if ($isNFCORE){
+	if ($isNFCORE && $nextFlowPipe !~ /nf-core-ssds/){
 		system("ln -s $fqR1 $runFolder/R1.fastq.gz");
 		system("ln -s $fqR2 $runFolder/R2.fastq.gz");
 	}
@@ -351,7 +363,7 @@ for my $pipeType(split(/,/,$pipeList)){
 	## Modified Sept 25 2020: Kevin Brick
 	#print SC 'module load nextflow/20.01.0'."\n"; ## April 2020
 	#print SC 'module load singularity/3.6.4'."\n";
-  print SC 'module load nextflow/20.10.0'."\n";
+  print SC 'module load nextflow/21.04.1'."\n";
 	print SC 'module load singularity'."\n";
   ## END MOD Sept 25
 
@@ -466,8 +478,53 @@ for my $pipeType(split(/,/,$pipeList)){
 }
 
 ########################################################################
+sub is_valid_Regex{
+	my ($re, $ss) = @_;
+	
+	my $inDir = `pwd`;
+	if ($re =~ s/^(.+\/)//){
+		$inDir = $1; 
+	}
+	
+	$inDir = abs_path($inDir);
+	
+	my %reads;
+	my $re_cmd = 'ls '.$inDir.'\/*';
+	if ($re){
+		$re_cmd = 'ls '.$inDir.'\/'.$re;
+	}
+	
+	for my $fq(`$re_cmd`){
+		next unless ($fq =~ /.(fastq|fq)(.gz)*$/);
+		chomp $fq;
+		if ($fq =~ /^.*\/(.+)\.(R[12])\.f.+$/){
+			my ($id,$read) = ($1,$2);
+			$reads{$id}->{$read} = $fq;
+		}
+	}
+	
+	my $ret_cnt = 0;
+	for my $id(sort keys(%reads)){
+		if ($reads{$id}->{'R1'} && $reads{$id}->{'R2'}){
+			$$ss .= join(",",$id,$reads{$id}->{'R1'},$reads{$id}->{'R2'})."\n";
+			$ret_cnt++;
+		}
+	}
+	
+	if ($ret_cnt){
+		$$ss = join(",","sample","fastq_1","fastq_2"."\n").$$ss; 
+		chomp $$ss;
+		return 1;
+	}else{
+		return 0;
+	}
+	
+	
+}
+
+########################################################################
 sub whatPipe{
-	my ($wBAM,$wFQ1,$wFQ2,$objRegex,$mySRA,$type,$peORsr,$runFolder) = @_;
+	my ($wBAM,$wFQ1,$wFQ2,$objRegex,$mySRA,$type,$peORsr,$runFolder,$ss_details,$ss_out) = @_;
 
 	## Figure out what pipeline to use
 	#  Returns the path to the nextflow pipeline
@@ -475,7 +532,8 @@ sub whatPipe{
 
 	my $pipeNF;
 	$pipeNF = $ENV{DSL2DIR}.'/pipelines/align.nf'    if ($type =~ /^(bwa|bwaaln|mm2|bowtie)$/);
-	$pipeNF = $ENV{DSL2DIR}.'/pipelines/ssds.nf'     if ($type =~ /^(ssds|ssdsorig)$/);
+	$pipeNF = $ENV{DSL2DIR}.'/pipelines/ssds.nf'     if ($type =~ /^(ssdsv2|ssdsv1)$/);
+	$pipeNF = $ENV{DSL2DIR}.'/nf-core-ssds/main.nf'  if ($type =~ /^(ssds)$/);
   $pipeNF = $ENV{DSL2DIR}.'/pipelines/commitFQ.nf' if ($type =~ /^(commitfq)$/);
 	$pipeNF = $ENV{DSL2DIR}.'/pipelines/rtseq.nf'    if ($type =~ /^rtseq$/);
 	$pipeNF = $ENV{DSL2DIR}.'/pipelines/hic4dn.nf'   if ($type =~ /^hic$/);
@@ -497,10 +555,26 @@ sub whatPipe{
 		if ($pipeNF =~ /methylseq/){
 			$pArgs .= " --reads \'$runFolder\/$readsWCString\' " ;
 		}else{
-			$pArgs .= " --input \'$runFolder\/$readsWCString\' " ;
+			if ($type eq "ssds"){
+				if (!$ss_details){
+					$ss_details  = 'sample,fastq_1,fastq_2'."\n";
+					$ss_details .= join(",",$outName,$wFQ1,$wFQ2."\n");
+				}
+				open SS, '>', $ss_out;
+				print SS $ss_details;
+				close SS;
+				
+				$pArgs .= " --input $ss_out " ;
+			}else{
+				$pArgs .= " --input \'$runFolder\/$readsWCString\' " ;
+			}
 		}
 		$pArgs .= " --outdir $outDir " ;
 
+		if ($type eq 'ssds'){
+			$pArgs .= ' --genome '.$genome ;
+		}
+		
 		if ($type =~ /methyl/){
 			$pArgs .= ' --aligner bwameth ';
 			$pArgs .= ' --fasta '.$ENV{NXF_GENOMES}.'/'.$genome.'/genome.fa ' ;
@@ -542,11 +616,11 @@ sub whatPipe{
 		$pArgs .= " --fq1 $wFQ1 --fq2 $wFQ2 --pe true"                                 if ($wFQ1 && $wFQ2);
 		$pArgs .= " --fq1 $wFQ1 --pe false"                                            if ($wFQ1 && !$wFQ2);
 
-		$pArgs .= " --splitSz $fastqSplitSize "                                        if ($type =~ /^(bwa|bwaaln|mm2|bowtie|ssds|ssdsorig)$/);
+		$pArgs .= " --splitSz $fastqSplitSize "                                        if ($type =~ /^(bwa|bwaaln|mm2|bowtie|ssdsv1|ssdsv2)$/);
 		$pArgs .= " --aligner $type"                                                   if ($type =~ /^(bwa|bwaaln|mm2|bowtie)$/);
 		$pArgs .= ' --type map-ont '                                                   if ($type =~ /^mm2ont$/i);
 
-		$pArgs .= " --r1Len $read1Length --r2Len $read2Length --original true "        if ($type eq 'ssdsorig');
+		$pArgs .= " --r1Len $read1Length --r2Len $read2Length --original true "        if ($type eq 'ssdsv1');
 		$pArgs .= " --gcCorrection $gcCorrectionFile "                                 if ($type eq 'rtseq');
 
 		$pArgs .= " --name $outName --outdir $outDir --genome $genome ";
@@ -716,7 +790,7 @@ sub printARGS{
 	print STDERR "                                      die if regex captures > 1 sample. To allow this, use --mOK.\n";
 	print STDERR "                                      To test what samples will match your regex, use :\n";
 	print STDERR "                                      \$DSL2DIR/lsObj -p \$regex \n";
-	print STDERR "                                      NOTE: Only for ssds / ssdsorig / bwa / minimap2 pipelines \n";
+	print STDERR "                                      NOTE: Only for ssdsv1 / ssdsv2 / bwa / minimap2 pipelines \n";
 	print STDERR "\n";
 	print STDERR "-----------------------------------------------------------------------------------------------------------------------\n";
 	print STDERR "Pipeline details:\n";
@@ -777,7 +851,7 @@ sub printPipeDetails{
 	print STDERR "--pipe minimap     Align to reference genome using minimap2/2.13.  Also generates bigwigs\n";
 	print STDERR "       minimap2    and sample quality metrics. QC metrics are best viewed in the multiQC\n";
 	print STDERR "       mm2         report.\n\n";
-	print STDERR "--pipe ssdsorig     ORIGINAL SSDS pipeline using BWA-RA [not deprecated; use ssds pipe instead]\n";
+	print STDERR "--pipe ssdsv1      ORIGINAL SSDS pipeline using BWA-RA [not deprecated; use ssds pipe instead]\n";
 	print STDERR "                   Align SSDS data to reference genome using SSDSpipeline/1.6. This pipeline \n";
 	print STDERR "                   generates multiple output bam files, representing different types of DNA that \n";
 	print STDERR "                   were identified (ssDNA, dsDNA, unclassified; see Khil et al. 2012). It \n";
@@ -786,7 +860,7 @@ sub printPipeDetails{
 	print STDERR "                   bam file is also generated. This contains all reads prior to any parsing \n";
 	print STDERR "                   for DNA type. The pipeline also generates bigwigs and SSDS sample quality \n";
 	print STDERR "                   metrics. QC metrics are best viewed in the multiQC report.\n\n";
-	print STDERR "--pipe ssds        Align SSDS data to reference genome using SSDSpipeline_long/1.6\n";
+	print STDERR "--pipe ssdsv2      Align SSDS data to reference genome using SSDSpipeline_long/1.6\n";
 	print STDERR "                   This version of the SSDS pipeline is considerably faster because \n";
 	print STDERR "                   instead of the iterative realignment of the second end, it instead\n";
 	print STDERR "                   simply allows the fill-in ITR of the second end to be aligned with a\n";
@@ -794,6 +868,9 @@ sub printPipeDetails{
 	print STDERR "                   like the 150bp PE reads from Admera. Early test show comparable, if\n";
 	print STDERR "                   not better alignment than the original SSDS pipeline. For reads >150bp\n";
 	print STDERR "                   Minimap 2 is used, otherwise BWA MEM. This was formerly the ssdslong pipe.\n\n";
+	print STDERR "--pipe ssds        Align SSDS data to reference genome using the nf-core SSDS pipeline\n";
+	print STDERR "                   BWA MEM is used for alignment. All files in a folder can be run \n";
+	print STDERR "                   concurrently using the --dir flag. (NOT YET WORKING WITH --obj/--sra)\n\n";
   print STDERR "--pipe commitfq    This pipeline will save sequencing data to the RDCO object storage. Should ONLY \n";
   print STDERR "                   be used for original sequencing data and NOT for intermediate files. Please \n";
   print STDERR "                   discuss with Kevin if you want to add something to the object store. \n\n";

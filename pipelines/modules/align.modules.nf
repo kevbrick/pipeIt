@@ -530,7 +530,7 @@ process trimFASTQsr {
 
   script:
   """
-  if [[ "${fq}" =~ .gz\$ ]]; then gz=${fq}; fq=\${fq/.gz/}; zcat ${fq} >\$fq; fi
+  if [[ "${fq}" =~ .gz\$ ]]; then gz=${fq}; fq=\${gz/.gz/}; zcat ${fq} >\$fq; fi
   fqr1=`ls *.R1.fastq`
 
   #trimFQ1=`echo "\$fqr1" |perl -pi -e 's/.fastq/_val_1.fq/'`
