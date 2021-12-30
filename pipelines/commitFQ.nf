@@ -22,7 +22,6 @@ if (params.help) {
   log.info " --fq2           <Read2 fastq file>"
   log.info " --obj           <Sample name regex for RDCO object store>"
   log.info " --pe            pass arg if paired-end (required for --sra or --obj)"
-  log.info " --genome        <string> \\"
   log.info " --name          <string default=bam file stem> \\"
   log.info " "
   log.info "HELP: nextflow run \$DSL2DIR/commitFQ.nf --help"
@@ -32,7 +31,6 @@ if (params.help) {
 
 // Params:
 params.name           = 'commited'
-params.genome         = ''
 params.pe             = true
 params.outdir         = "out"
 params.sra            = ''
@@ -69,7 +67,6 @@ log.info "COMMIT FQ PIPELINE 2.0 : Map, mark duplicates, sort and index       "
 log.info "===================================================================="
 log.info "name               : ${params.name}"
 log.info "outdir             : ${params.outdir}"
-log.info "ref genome         : ${params.genome}"
 log.info "source type        : ${inputType}"
 if (params.bam){log.info "bam                : ${params.bam}"}
 if (params.sra){log.info "sra                : ${params.sra}"}
@@ -86,7 +83,6 @@ log.info ""
 // import modules for pipeline
 include { getFQs; commitToObj} from "${projectDir}/modules/getFQ.modules.nf" \
   params(inputType: inputType, \
-         genome: params.genome, \
          outdir: params.outdir , \
          bam: params.bam , \
          sra: params.sra, \

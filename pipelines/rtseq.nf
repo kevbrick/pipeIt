@@ -40,7 +40,7 @@ if (params.help) {
 params.name             = 'ssds_test_output'
 params.genome           = ''
 params.genomes2screen   = 'mm10,hg38,rn6,sacCer3,canFam3,monDom5,ecoli,bsub214,phiX,UniVec'
-params.gcCorrection     = "HiSeqX"
+params.gcCorrection     = ''
 params.splitSz          = 20000000
 params.aligner          = "bwa"
 params.pe               = true

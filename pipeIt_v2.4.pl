@@ -97,20 +97,20 @@ if ($pipeList =~ s/(rtseq):(\S+)/$1/i){
 
 if ($pipeList =~ /rtseq/i){
 	my %corrOK;
-	for my $gc ('Admera_HiSeqX','HiSeqX',
-              'NIDDK_HiSeq2500','HiSeq2500',
-							'Nussenzweig_HiSeq2000','HiSeq2000',
-							'Yehuda_NextSeq500','NextSeq500'){
+	for my $gc ('Admera_HiSeqX','AdmeraHiSeqX','HiSeqX',
+              'NIDDK_HiSeq2500','NIDDKHiSeq2500','HiSeq2500',
+							'Nussenzweig_HiSeq2000','NussenzweigHiSeq2000','HiSeq2000',
+							'Yehuda_NextSeq500','YehudaNextSeq500','NextSeq500'){
 								$corrOK{uc($gc)}++;
 							}
 	
 	if (not $corrOK{uc($gcCorrectionFile)}){
 		$errMSG .= 'Invalid GC correction opriot (--gcCorr) ['.$gcCorrectionFile."]\n" ;
 		$errMSG .= "Options are: \n" ;
-		$errMSG .= "Admera_HiSeqX / HiSeqX\n" ;
-		$errMSG .= "NIDDK_HiSeq2500 / HiSeq2500\n" ;
-		$errMSG .= "Nussenzweig_HiSeq2000 / HiSeq2000\n" ;
-		$errMSG .= "Yehuda_NextSeq500 / NextSeq500\n" ;
+		$errMSG .= "Admera_HiSeqX / AdmeraHiSeqX / HiSeqX\n" ;
+		$errMSG .= "NIDDK_HiSeq2500 / NIDDKHiSeq2500 / HiSeq2500\n" ;
+		$errMSG .= "Nussenzweig_HiSeq2000 / NussenzweigHiSeq2000 / HiSeq2000\n" ;
+		$errMSG .= "Yehuda_NextSeq500 / YehudaNextSeq500 / NextSeq500\n" ;
 	}
 }
 
@@ -354,8 +354,10 @@ for my $pipeType(split(/,/,$pipeList)){
 	## For nf-core pipelines, we want to have the fastqs in the run folder
 	## This sidesteps issues with parsing the input string (see whatPipe function)
 	if ($isNFCORE && $nextFlowPipe !~ /nf-core-ssds/){
-		system("ln -s $fqR1 $runFolder/R1.fastq.gz");
-		system("ln -s $fqR2 $runFolder/R2.fastq.gz");
+    my $nfcore_fq1 = $fqR1; $nfcore_fq1 =~ s/^.+\/(.+)\.(R1.(fq|fastq))/$1_$2/;
+		my $nfcore_fq2 = $fqR2; $nfcore_fq2 =~ s/^.+\/(.+)\.(R2.(fq|fastq))/$1_$2/;
+		system("ln -s $fqR1 $runFolder/$nfcore_fq1");
+		system("ln -s $fqR2 $runFolder/$nfcore_fq2");
 	}
 
 	open SC, '>'.$outScript;
@@ -397,8 +399,8 @@ for my $pipeType(split(/,/,$pipeList)){
 	open IN, $outScript;
 	while (<IN>){
 		if ($_ =~ s/(nextflow\srun)/$1 -resume/){
-			print RESUMESCRIPT      "cleanNXFwork $runFolder\n";
-			print RESUMESCRIPTLOCAL "cleanNXFwork $runFolder\n";
+			print RESUMESCRIPT      "#cleanNXFwork $runFolder\n";
+			print RESUMESCRIPTLOCAL "#cleanNXFwork $runFolder\n";
 			$_ =~ s/(\-profile\s+\S*)local/$1."slurm"/e;
 			print RESUMESCRIPT      $_;
 
@@ -533,13 +535,20 @@ sub is_valid_Samplesheet{
 	open IN, $ssfile; 
 	while (<IN>){
 		chomp;
-
+		
+		unless ($_ =~ /\S\t\S/){
+			print STDERR "Sample-sheet is not TAB delimited!";
+			return 0;
+		}
+		
 		my @ss_line = split(/\t/,$_);
+		## SSDS Sample sheet
 		if ($#ss_line == 2){
 			my ($sample, $r1, $r2) = @ss_line;
 			$$ss .= join(",",$sample, $r1, $r2."\n");
 			$ret_cnt++ if ($sample ne 'sample');
 		}else{
+			## Hi-C Sample sheet
 			if ($#ss_line == 4){
 				my ($sample, $seqrep, $biorep, $r1, $r2) = @ss_line;
 				$$ss .= join(",",$sample, $seqrep, $biorep, $r1, $r2."\n");
@@ -572,7 +581,7 @@ sub whatPipe{
 	$pipeNF = $ENV{DSL2DIR}.'/pipelines/hic4dn.nf'   if ($type =~ /^hic$/);
 
   ## Allow nf-core pipelines
-	$pipeNF = 'nf-core/methylseq -r 1.5 ' if ($type =~ /^methyl$/);
+	$pipeNF = 'nf-core/methylseq -r 1.6.1 ' if ($type =~ /^methyl$/);
 	
 	my $pArgs;
 	## Allow for NF-CORE PIPELINES
@@ -581,12 +590,12 @@ sub whatPipe{
 		##            i.e. Sample1_R{1,2}.fastq.gz can cause issues because it doesn't like text before the R{1,2} string !!!
 		##            Odd behaviour, but we need to work with it. For nf-core, symlinks to fqs now go to run folder ...
 		#my $readsWCString = $wFQ1; $readsWCString =~ s/R1/\R\{1\,2\}/;
-		my $readsWCString = 'R{1,2}.fastq.gz';
+		my $readsWCString = '*_R{1,2}.fastq.gz';
 
 		#KB 04-28-21: Modified for newer nf-core pipelines
 		#$pArgs .= " --input \'$readsWCString\' " ;
 		if ($pipeNF =~ /methylseq/){
-			$pArgs .= " --reads \'$runFolder\/$readsWCString\' " ;
+			$pArgs .= " --input \'$runFolder\/$readsWCString\' " ;
 		}else{
 			if ($type eq "ssds"){
 				if (!$ss_details){
@@ -862,7 +871,7 @@ sub printARGS{
 	#print STDERR "--mOK         : allow multi-sample       default = no (see --obj above)\n";
 	print STDERR "--gcCorr      : GC-correction for rtSeq  Pre-built options: \n";
   print STDERR "                                         NOTE: can be passed using --pipe rtseq:<<gcCorr>> ; i.e. --pipe rtseq:HiSeqX \n";
-	print STDERR "                                         Admera_HiSeqX / NIDDK_HiSeq2500 / Nussenzweig_HiSeq2000 / Yehuda_NextSeq500  \n";
+	print STDERR "                                         AdmeraHiSeqX / NIDDKHiSeq2500 / NussenzweigHiSeq2000 / YehudaNextSeq500  \n";
 	print STDERR "                                         If not provided, the RT-Seq pipeline will run in LONG-mode. This will generate\n";
 	print STDERR "                                         a correction file that can be used for subsequent runs. The best-practice for \n";
 	print STDERR "                                         new samples is to generate a correction file from a non-replicating sample \n";

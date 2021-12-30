@@ -8,47 +8,49 @@ use Math::Round;
 
 my $opts = $#ARGV;
 
-GetOptions ('bam=s'        => \(my $bam),
-            'f1=s'         => \(my $fqR1),
-            'f2=s'         => \(my $fqR2),
-						'dir=s'        => \(my $dir), ## Can include wildcards,
-            'g=s'          => \(my $genome),
-            'obj=s'        => \(my $objectStoreRegex),
-            'sra=s'        => \(my $SRAIDs),
-            's=s'          => \(my $sample),
-						'ss=s'         => \(my $samplesheet),
-            'o=s'          => \(my $outName),
-            'od=s'         => \(my $outDir),
-            'wd=s'         => \(my $workingDir),
-            'd=s'          => \(my $rundate),
-            'long+'        => \(my $runLonger),
-            'n=s'          => \(my $threads=16),
-            'm=s'          => \(my $mem=32),
-            'time=s'       => \(my $nTime),
-            'lR1=s'        => \(my $read1Length="36"),
-            'lR2=s'        => \(my $read2Length="40"),
-            'type=s'       => \(my $PEorSR),
-            'hicbins=s'    => \(my $hic_binsizes = "1000000,750000,500000,250000,100000,75000,50000,25000,10000,7500,5000,2500,1000"),
-            'ssz=i'        => \(my $fastqSplitSize=10000000),
-            'config=s'     => \(my $configFile),
-            'dep=s'        => \(my $depJobID),
-            'inode+'       => \(my $runOnCurrentNode),
-            'hide+'        => \(my $hiddenScripts),
-            'l+'           => \(my $runLocal),
-            't+'           => \(my $outToTmp),
-            'homeOK+'      => \(my $homeOK),
-            'dryrun+'      => \(my $dryRun),
-            'nobamyet+'    => \(my $missingBAMok),
-            'debug+'       => \(my $debugMe),
-            'h+'           => \(my $help),
-            'H+'           => \(my $extraHelp),
-            'plist+'       => \(my $extraHelpAlt),
-            'gcCorr=s'     => \(my $gcCorrectionFile),
-            'mod+'         => \(my $useModules),
-            'test+'        => \(my $testData),
-            'profile=s'    => \(my $nxfProfiles),
-            'pipe=s'       => \(my $pipeList),
-            'hicaligner=s' => \(my $hic_aligner = 'bwa'));
+GetOptions ('bam=s'              => \(my $bam),
+            'f1=s'               => \(my $fqR1),
+            'f2=s'               => \(my $fqR2),
+						'dir=s'              => \(my $dir), ## Can include wildcards,
+            'g=s'                => \(my $genome),
+            'obj=s'              => \(my $objectStoreRegex),
+            'sra=s'              => \(my $SRAIDs),
+            's=s'                => \(my $sample),
+						'ss=s'               => \(my $samplesheet),
+            'o=s'                => \(my $outName),
+            'od=s'               => \(my $outDir),
+            'wd=s'               => \(my $workingDir),
+            'd=s'                => \(my $rundate),
+            'long+'              => \(my $runLonger),
+            'n=s'                => \(my $threads=16),
+            'm=s'                => \(my $mem=32),
+            'time=s'             => \(my $nTime),
+            'lR1=s'              => \(my $read1Length="36"),
+            'lR2=s'              => \(my $read2Length="40"),
+            'type=s'             => \(my $PEorSR),
+            'hicbins=s'          => \(my $hic_binsizes = "1000000,750000,500000,250000,100000,75000,50000,25000,10000,7500,5000,2500,1000"),
+            'ssz=i'              => \(my $fastqSplitSize=10000000),
+            'config=s'           => \(my $configFile),
+            'dep=s'              => \(my $depJobID),
+            'inode+'             => \(my $runOnCurrentNode),
+            'hide+'              => \(my $hiddenScripts),
+            'l+'                 => \(my $runLocal),
+            't+'                 => \(my $outToTmp),
+            'homeOK+'            => \(my $homeOK),
+            'dryrun+'            => \(my $dryRun),
+            'nobamyet+'          => \(my $missingBAMok),
+            'debug+'             => \(my $debugMe),
+            'h+'                 => \(my $help),
+            'H+'                 => \(my $extraHelp),
+            'plist+'             => \(my $extraHelpAlt),
+            'gcCorr=s'           => \(my $gcCorrectionFile),
+						'spot_intervals=s'   => \(my $spot_intervals = ""),
+            'mod+'               => \(my $useModules),
+            'test+'              => \(my $testData),
+            'parse_extra_types+' => \(my $parse_extra_types),
+            'profile=s'          => \(my $nxfProfiles),
+            'pipe=s'             => \(my $pipeList),
+            'hicaligner=s'       => \(my $hic_aligner = 'bwa'));
 
 #my $todayDate = getTodayDate()sub{sprintf '%02d%02d%02d',
 #    $_[5]+1900-2000, $_[4]+1, $_[3]}->(localtime);
@@ -97,20 +99,20 @@ if ($pipeList =~ s/(rtseq):(\S+)/$1/i){
 
 if ($pipeList =~ /rtseq/i){
 	my %corrOK;
-	for my $gc ('Admera_HiSeqX','HiSeqX',
-              'NIDDK_HiSeq2500','HiSeq2500',
-							'Nussenzweig_HiSeq2000','HiSeq2000',
-							'Yehuda_NextSeq500','NextSeq500'){
+	for my $gc ('Admera_HiSeqX','AdmeraHiSeqX','HiSeqX',
+              'NIDDK_HiSeq2500','NIDDKHiSeq2500','HiSeq2500',
+							'Nussenzweig_HiSeq2000','NussenzweigHiSeq2000','HiSeq2000',
+							'Yehuda_NextSeq500','YehudaNextSeq500','NextSeq500'){
 								$corrOK{uc($gc)}++;
 							}
-	
+
 	if (not $corrOK{uc($gcCorrectionFile)}){
 		$errMSG .= 'Invalid GC correction opriot (--gcCorr) ['.$gcCorrectionFile."]\n" ;
 		$errMSG .= "Options are: \n" ;
-		$errMSG .= "Admera_HiSeqX / HiSeqX\n" ;
-		$errMSG .= "NIDDK_HiSeq2500 / HiSeq2500\n" ;
-		$errMSG .= "Nussenzweig_HiSeq2000 / HiSeq2000\n" ;
-		$errMSG .= "Yehuda_NextSeq500 / NextSeq500\n" ;
+		$errMSG .= "Admera_HiSeqX / AdmeraHiSeqX / HiSeqX\n" ;
+		$errMSG .= "NIDDK_HiSeq2500 / NIDDKHiSeq2500 / HiSeq2500\n" ;
+		$errMSG .= "Nussenzweig_HiSeq2000 / NussenzweigHiSeq2000 / HiSeq2000\n" ;
+		$errMSG .= "Yehuda_NextSeq500 / YehudaNextSeq500 / NextSeq500\n" ;
 	}
 }
 
@@ -186,12 +188,12 @@ for my $pipeType(split(/,/,$pipeList)){
 		print STDERR '## NOTE: Using an nf-core pipeline'."\n";
 		$isNFCORE = 1;
 	}
-	
+
 	if ($pipeType =~ /^(ssds)$/){
 		print STDERR '## NOTE: Using the SSDS nf-core pipeline'."\n";
 		$isNFCORE = 1;
 	}
-	
+
 	if (!$isNFCORE && $pipeType !~ /^(commitfq)$/){
 		if ($genome eq 'guess'){
 			my $inFileName;
@@ -208,7 +210,7 @@ for my $pipeType(split(/,/,$pipeList)){
 		## KB 181128
 		$errMSG .= 'Genome NOT found (--g $genome)'."\n" unless (-d ($ENV{NXF_GENOMES}.'/'.$genome));
 	}
-	
+
 	if ($errMSG){
 		printARGS($errMSG);
 		exit();
@@ -220,13 +222,12 @@ for my $pipeType(split(/,/,$pipeList)){
 	$fqR2        = abs_path($fqR2)        if ($fqR2);
 
 	## SET config file
+	my $all_configs = abs_path('/data/RDCO/code/nextflow-config/biowulf.config');
+	$all_configs .= ",".abs_path('/data/RDCO/code/nextflow-config/pipeIt.config') if (!$isNFCORE);
+	
 	if ($configFile){
-		$configFile  = abs_path($configFile)  ;
-	}else{
-		if ($isNFCORE){
-			$configFile = abs_path('/data/RDCO/code/nf-core/config/biowulf.config.nf') ;
-		}else{
-			$configFile = abs_path($ENV{'DSL2DIR'}.'/config/nextflow.config.nf');
+		while ($configFile =~ s/^(.+?)[,$]//){
+			$all_configs .= ",".abs_path($configFile);
 		}
 	}
 
@@ -234,7 +235,7 @@ for my $pipeType(split(/,/,$pipeList)){
 	## USE profiles to import configs for each pipe
 	my $profiles;
 	$profiles .= ",modules"     if ($useModules);
-	$profiles .= ",singularity" if (!$useModules || $isNFCORE);
+	$profiles .= ",singularity" if ($isNFCORE);
 	$profiles .= ",local"       if ($runLocal);
   $profiles .= ",slurm"       if (!$runLocal);
 
@@ -327,20 +328,19 @@ for my $pipeType(split(/,/,$pipeList)){
 	my $outResumeScriptLocal  = $runFolder.($hiddenScripts?'.':'').'local_RESUME_'.$randName.'_pipeIt.sh';
 
 	system('mkdir '.$runFolder);
-	
+
 	#my $workFolder = $runFolder.'work_'.$outName;
 	my $workFolder = $runFolder.'work';
 
 	## KB Sept 21 2017: allow custom config files
 	my $nextFlowArgs;
-	my $myConfig = $configFile;
-
+	
 	if ($pipeType =~ /^hic/){
-		$myConfig .= ",".abs_path($ENV{'DSL2DIR'}.'/pipelines/config/config_4dn.nf')
+		$all_configs .= ",".abs_path($ENV{'DSL2DIR'}.'/pipelines/config/config_4dn.nf')
 	}
 
-	$nextFlowArgs .= " -c $myConfig -profile $profiles -work-dir $workFolder ";
-
+	$nextFlowArgs .= " -c $all_configs -profile $profiles -work-dir $workFolder ";
+	
 	## KB Nov 21 2018: Set runtimes
 	my ($sBatchTime,$nxfTime);
 	if ($nTime){
@@ -349,13 +349,18 @@ for my $pipeType(split(/,/,$pipeList)){
 
   ## get pipeline and ARGS
 	my ($nextFlowPipe, $pipeArgs) = whatPipe($bam,$fqR1,$fqR2,$objectStoreRegex,$SRAIDs,$pipeType,$PEorSR,$runFolder,$ss_data,$outSampleSheet);
-
+	
+	## add dev flag for nf-core ssds pipeline (for now)
+	$nextFlowArgs .= " -r dev " if ($nextFlowPipe =~ /nf-core\/ssds/);
+	
   ## 030821 KB:
 	## For nf-core pipelines, we want to have the fastqs in the run folder
 	## This sidesteps issues with parsing the input string (see whatPipe function)
-	if ($isNFCORE && $nextFlowPipe !~ /nf-core-ssds/){
-		system("ln -s $fqR1 $runFolder/R1.fastq.gz");
-		system("ln -s $fqR2 $runFolder/R2.fastq.gz");
+	if ($isNFCORE && $nextFlowPipe !~ /nf-core\/ssds/){
+    my $nfcore_fq1 = $fqR1; $nfcore_fq1 =~ s/^.+\/(.+)\.(R1.(fq|fastq))/$1_$2/;
+		my $nfcore_fq2 = $fqR2; $nfcore_fq2 =~ s/^.+\/(.+)\.(R2.(fq|fastq))/$1_$2/;
+		system("ln -s $fqR1 $runFolder/$nfcore_fq1");
+		system("ln -s $fqR2 $runFolder/$nfcore_fq2");
 	}
 
 	open SC, '>'.$outScript;
@@ -365,7 +370,7 @@ for my $pipeType(split(/,/,$pipeList)){
 	## Modified Sept 25 2020: Kevin Brick
 	#print SC 'module load nextflow/20.01.0'."\n"; ## April 2020
 	#print SC 'module load singularity/3.6.4'."\n";
-  print SC 'module load nextflow/21.04.1'."\n";
+  print SC 'module load nextflow/21.10.5'."\n";
 	print SC 'module load singularity'."\n";
   ## END MOD Sept 25
 
@@ -397,8 +402,8 @@ for my $pipeType(split(/,/,$pipeList)){
 	open IN, $outScript;
 	while (<IN>){
 		if ($_ =~ s/(nextflow\srun)/$1 -resume/){
-			print RESUMESCRIPT      "cleanNXFwork $runFolder\n";
-			print RESUMESCRIPTLOCAL "cleanNXFwork $runFolder\n";
+			print RESUMESCRIPT      "#cleanNXFwork $runFolder\n";
+			print RESUMESCRIPTLOCAL "#cleanNXFwork $runFolder\n";
 			$_ =~ s/(\-profile\s+\S*)local/$1."slurm"/e;
 			print RESUMESCRIPT      $_;
 
@@ -427,8 +432,8 @@ for my $pipeType(split(/,/,$pipeList)){
 			$pipeExec = "bash $outScript";
 			$cmdOK++;
 		}
-		
-		
+
+
 		if (!$cmdOK && ($inputSize > 60 || $pipeType =~ /hic/ || $runLonger || $isNFCORE)){
 			#system("sbatch --mail-type=BEGIN,TIME_LIMIT_90,END -J P.".$randName." --ntasks=".($runLocal?"16":"1")." --mem=".($runLocal?"32":"32")."g --gres=lscratch:800 ".$dependency." --time=".($sBatchTime?$sBatchTime:"96:03:00")." --partition=norm $outScript");
 			$pipeExec = "sbatch --mail-type=BEGIN,TIME_LIMIT_90,END -J nx.$pipeType.".$randName." --ntasks=".($runLocal?"16":"1")." --mem=".($runLocal?"32":"32")."g --gres=lscratch:800 ".$dependency." --time=".($sBatchTime?$sBatchTime:"96:03:00")." --partition=norm $outScript";
@@ -483,20 +488,20 @@ for my $pipeType(split(/,/,$pipeList)){
 ########################################################################
 sub is_valid_Regex{
 	my ($re, $ss) = @_;
-	
+
 	my $inDir = `pwd`;
 	if ($re =~ s/^(.+\/)//){
-		$inDir = $1; 
+		$inDir = $1;
 	}
-	
+
 	$inDir = abs_path($inDir);
-	
+
 	my %reads;
 	my $re_cmd = 'ls '.$inDir.'\/*';
 	if ($re){
 		$re_cmd = 'ls '.$inDir.'\/'.$re;
 	}
-	
+
 	for my $fq(`$re_cmd`){
 		next unless ($fq =~ /.(fastq|fq)(.gz)*$/);
 		chomp $fq;
@@ -505,7 +510,7 @@ sub is_valid_Regex{
 			$reads{$id}->{$read} = $fq;
 		}
 	}
-	
+
 	my $ret_cnt = 0;
 	for my $id(sort keys(%reads)){
 		if ($reads{$id}->{'R1'} && $reads{$id}->{'R2'}){
@@ -513,16 +518,16 @@ sub is_valid_Regex{
 			$ret_cnt++;
 		}
 	}
-	
+
 	if ($ret_cnt){
-		$$ss = join(",","sample","fastq_1","fastq_2"."\n").$$ss; 
+		$$ss = join(",","sample","fastq_1","fastq_2"."\n").$$ss;
 		chomp $$ss;
 		return 1;
 	}else{
 		return 0;
 	}
-	
-	
+
+
 }
 
 ########################################################################
@@ -530,16 +535,32 @@ sub is_valid_Samplesheet{
 	my ($ssfile, $ss) = @_;
 
 	my $ret_cnt = 0;
-	open IN, $ssfile; 
+	open IN, $ssfile;
 	while (<IN>){
 		chomp;
 
-		my @ss_line = split(/\t/,$_);
+	my @ss_line;
+	
+	if ($_ =~ /\S\t\S+\t/){
+		#print STDERR "Sample-sheet is TAB delimited!\n";
+		@ss_line = split(/\t/,$_);
+	}else{
+		if ($_ =~ /\S,\S+,/){
+			#print STDERR "Sample-sheet is COMMA delimited!\n" unless($errMsgFlag++);
+			@ss_line = split(/,/,$_);
+		}else{
+			print STDERR "Sample-sheet is neither TAB / COMMA delimited!\n";
+			return 0;
+		}
+	}
+
+		## SSDS Sample sheet
 		if ($#ss_line == 2){
 			my ($sample, $r1, $r2) = @ss_line;
 			$$ss .= join(",",$sample, $r1, $r2."\n");
 			$ret_cnt++ if ($sample ne 'sample');
 		}else{
+			## Hi-C Sample sheet
 			if ($#ss_line == 4){
 				my ($sample, $seqrep, $biorep, $r1, $r2) = @ss_line;
 				$$ss .= join(",",$sample, $seqrep, $biorep, $r1, $r2."\n");
@@ -547,7 +568,7 @@ sub is_valid_Samplesheet{
 			}
 		}
 	}
-	
+
 	if ($ret_cnt){
 		return 1;
 	}else{
@@ -556,7 +577,7 @@ sub is_valid_Samplesheet{
 }
 
 ########################################################################
-sub whatPipe{ 
+sub whatPipe{
 	my ($wBAM,$wFQ1,$wFQ2,$objRegex,$mySRA,$type,$peORsr,$runFolder,$ss_details,$ss_out) = @_;
 
 	## Figure out what pipeline to use
@@ -564,16 +585,18 @@ sub whatPipe{
 	#  and the ARGS to use
 
 	my $pipeNF;
-	$pipeNF = $ENV{DSL2DIR}.'/pipelines/align.nf'    if ($type =~ /^(bwa|bwaaln|mm2|bowtie)$/);
-	$pipeNF = $ENV{DSL2DIR}.'/pipelines/ssds.nf'     if ($type =~ /^(ssdsv2|ssdsv1)$/);
-	$pipeNF = $ENV{DSL2DIR}.'/nf-core-ssds/main.nf'  if ($type =~ /^(ssds)$/);
-  $pipeNF = $ENV{DSL2DIR}.'/pipelines/commitFQ.nf' if ($type =~ /^(commitfq)$/);
-	$pipeNF = $ENV{DSL2DIR}.'/pipelines/rtseq.nf'    if ($type =~ /^rtseq$/);
-	$pipeNF = $ENV{DSL2DIR}.'/pipelines/hic4dn.nf'   if ($type =~ /^hic$/);
+	$pipeNF = $ENV{DSL2DIR}.'/pipelines/align.nf'       if ($type =~ /^(bwa|bwaaln|mm2|bowtie)$/);
+	$pipeNF = $ENV{DSL2DIR}.'/pipelines/ssds.nf'        if ($type =~ /^(ssdsv2|ssdsv1)$/);
+	## KB 12-20-2021: If nf-core version stops working, revert to this
+	#$pipeNF = $ENV{DSL2DIR}.'/nf-core-ssds_1.0/main.nf' if ($type =~ /^(ssds)$/);
+	$pipeNF = 'nf-core/ssds'                            if ($type =~ /^(ssds)$/);
+  $pipeNF = $ENV{DSL2DIR}.'/pipelines/commitFQ.nf'    if ($type =~ /^(commitfq)$/);
+	$pipeNF = $ENV{DSL2DIR}.'/pipelines/rtseq.nf'       if ($type =~ /^rtseq$/);
+	$pipeNF = $ENV{DSL2DIR}.'/pipelines/hic4dn.nf'      if ($type =~ /^hic$/);
 
   ## Allow nf-core pipelines
-	$pipeNF = 'nf-core/methylseq -r 1.5 ' if ($type =~ /^methyl$/);
-	
+	$pipeNF = 'nf-core/methylseq -r 1.6.1 ' if ($type =~ /^methyl$/);
+
 	my $pArgs;
 	## Allow for NF-CORE PIPELINES
   if ($pipeNF =~ /nf-core/){
@@ -581,12 +604,12 @@ sub whatPipe{
 		##            i.e. Sample1_R{1,2}.fastq.gz can cause issues because it doesn't like text before the R{1,2} string !!!
 		##            Odd behaviour, but we need to work with it. For nf-core, symlinks to fqs now go to run folder ...
 		#my $readsWCString = $wFQ1; $readsWCString =~ s/R1/\R\{1\,2\}/;
-		my $readsWCString = 'R{1,2}.fastq.gz';
+		my $readsWCString = '*_R{1,2}.fastq.gz';
 
 		#KB 04-28-21: Modified for newer nf-core pipelines
 		#$pArgs .= " --input \'$readsWCString\' " ;
 		if ($pipeNF =~ /methylseq/){
-			$pArgs .= " --reads \'$runFolder\/$readsWCString\' " ;
+			$pArgs .= " --input \'$runFolder\/$readsWCString\' " ;
 		}else{
 			if ($type eq "ssds"){
 				if (!$ss_details){
@@ -596,7 +619,7 @@ sub whatPipe{
 				open SS, '>', $ss_out;
 				print SS $ss_details;
 				close SS;
-				
+
 				$pArgs .= " --input $ss_out " ;
 			}else{
 				$pArgs .= " --input \'$runFolder\/$readsWCString\' " ;
@@ -606,8 +629,10 @@ sub whatPipe{
 
 		if ($type eq 'ssds'){
 			$pArgs .= ' --genome '.$genome ;
+			$pArgs .= ' --spot_intervals '.($spot_intervals ? $spot_intervals : " /data/RDCO/code/nextflow-config/spot_intervals.config ");
+			$pArgs .= ($parse_extra_types) ? " --parse_extra_types " : "";
 		}
-		
+
 		if ($type =~ /methyl/){
 			$pArgs .= ' --aligner bwameth ';
 			$pArgs .= ' --fasta '.$ENV{NXF_GENOMES}.'/'.$genome.'/genome.fa ' ;
@@ -642,7 +667,7 @@ sub whatPipe{
 
 				$fastqSplitSize = 10000000;
 			}
-			
+
 			if ($type =~ /^hic$/){
 				if ($ss_details){
 					#$ss_details  = 'Sample\tSeqRep\tBioRep\tR1\tR2'."\n".$ss_details;
@@ -650,13 +675,13 @@ sub whatPipe{
 					open SS, '>', $ss_out;
 					print SS $ss_details;
 					close SS;
-					
+
 					$pArgs .= " --ss $ss_out " ;
-					$ssused++; 
+					$ssused++;
 				}
 			}
 		}
-		
+
 		unless ($ssused){
 	  	$pArgs .= " --bam $wBAM     --pe ".(isBAMPE($wBAM    ,$peORsr)?"true":"false") if ($wBAM);
 	  	$pArgs .= " --obj $objRegex --pe ".(isOBJPE($objRegex,$peORsr)?"true":"false") if ($objRegex);
@@ -664,7 +689,7 @@ sub whatPipe{
 			$pArgs .= " --fq1 $wFQ1 --fq2 $wFQ2 --pe true"                                 if ($wFQ1 && $wFQ2);
 			$pArgs .= " --fq1 $wFQ1 --pe false"                                            if ($wFQ1 && !$wFQ2);
 		}
-		
+
 		$pArgs .= " --splitSz $fastqSplitSize "                                        if ($type =~ /^(bwa|bwaaln|mm2|bowtie|ssdsv1|ssdsv2)$/);
 		$pArgs .= " --aligner $type"                                                   if ($type =~ /^(bwa|bwaaln|mm2|bowtie)$/);
 		$pArgs .= ' --type map-ont '                                                   if ($type =~ /^mm2ont$/i);
@@ -862,7 +887,7 @@ sub printARGS{
 	#print STDERR "--mOK         : allow multi-sample       default = no (see --obj above)\n";
 	print STDERR "--gcCorr      : GC-correction for rtSeq  Pre-built options: \n";
   print STDERR "                                         NOTE: can be passed using --pipe rtseq:<<gcCorr>> ; i.e. --pipe rtseq:HiSeqX \n";
-	print STDERR "                                         Admera_HiSeqX / NIDDK_HiSeq2500 / Nussenzweig_HiSeq2000 / Yehuda_NextSeq500  \n";
+	print STDERR "                                         AdmeraHiSeqX / NIDDKHiSeq2500 / NussenzweigHiSeq2000 / YehudaNextSeq500  \n";
 	print STDERR "                                         If not provided, the RT-Seq pipeline will run in LONG-mode. This will generate\n";
 	print STDERR "                                         a correction file that can be used for subsequent runs. The best-practice for \n";
 	print STDERR "                                         new samples is to generate a correction file from a non-replicating sample \n";

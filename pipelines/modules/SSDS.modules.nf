@@ -64,7 +64,7 @@ process ssdsAlign {
 
     if [ \$fqLen -ge 99 ]; then
       echo "FASTQ Max Length = \$fqLen : Using minimap2 for initial alignment ..."
-      minimap2 -ax sr \
+      minimap2 -ax sr -I 12g \
         -t ${task.cpus} \
         ${params.genome_mm2idx} \
         ${fqR1} ${fqR2} >${tmp}.unsorted.sam

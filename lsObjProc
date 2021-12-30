@@ -1,0 +1,148 @@
+#!/usr/bin/perl
+
+use strict;
+use Cwd qw /abs_path/;
+use Getopt::Long;
+
+if($#ARGV < 1){showHelp() ; exit}
+
+GetOptions ('p=s'	=> \(my $pattern),
+	    	'v=s'	=> \(my $bucket2use = 'RDCOproc'),
+	    	'h+'	=> \(my $help),
+	    	'nm+'	=> \(my $doNotSearchMetaData),
+	    	'nx+'	=> \(my $doNotShowMetaData),
+	    	'ns+'	=> \(my $doNotShowSizes),
+	    	'r+'    => \(my $requeryObjectStore),
+	    	'get+'  => \(my $getFiles));
+
+if($help){showHelp() ; exit}
+unless($pattern){showHelp("No pattern specified (--p)") ; exit}
+
+my (@retFiles,@retSamples, @retMeta, @retSz, $R1, $R2, %peChk);
+
+#print STDERR "Using $bucket2use bucket ...\n";
+
+my $cmd;
+if ($requeryObjectStore){
+	system('perl /data/RDCO/docs/annotateProcessedObjectFQs.pl YES');
+}
+
+open PIPE, '/data/RDCO/docs/objectStorageProcessedAnnotatedList.tab' ;
+
+while (<PIPE>){
+	chomp;
+	$_ =~ s/^\s+//;
+	$_ =~ s/\s+(\S)/\t$1/g;
+	my @F = split(/\t/,$_);
+
+	my $useMe;
+	my $fileAndMD = join("_",$F[6],$F[7],$F[6],$F[7]);
+	$useMe++ if ($F[6] =~ /($pattern)/i);
+	$useMe++ if ($F[7] =~ /($pattern)/i && !$doNotSearchMetaData);
+	$useMe++ if ($fileAndMD =~ /($pattern)/i && !$doNotSearchMetaData);
+
+	if ($useMe){
+		my $sampName = $F[6];
+		$sampName =~ s/^(\d+)_(\S+?)_(\S+?)_(\S+?)_(\S+?)\..+$/$5/;
+
+		push @retFiles, $F[6] ;
+		push @retSamples, $sampName ;
+		push @retMeta, $F[7] ;
+		push @retSz, $F[1] ;
+		if ($F[6] =~ /[\_\.]R1[\_\.]/ || $F[6] =~ /read1/){
+			$R1++ ;
+		}else{
+			if ($F[6] =~ /[\_\.]R2[\_\.]/ || $F[6] =~ /read2/){
+				$R2++ ;
+			}else{
+				$R1++ ; ## No idea, so assume R1
+			}
+		}
+
+		## KB 3/23/20: added sr/pe functionality
+		my $peNM  = $F[6];
+		if ($peNM =~ s/^(.+)\.R2.fastq.gz/$1/){
+			$peChk{$peNM}++;
+		}
+		## KB 3/23/20: END
+	}
+}
+
+## KB 3/23/20: END
+
+my %warnings;
+
+my $totSz;
+
+unless ($#retFiles >= 0){
+	print STDERR "** WARNING **********************************************\n"; 
+	print STDERR "No files matching files found.\n";
+	print STDERR "---------------------------------------------------------\n"; 
+	print STDERR "Is the pattern correct[ --p $pattern ] ?\n";
+	print STDERR "If not, try enclosing it in quotes [ --p \"$pattern\" ].\n";
+	print STDERR "*********************************************************\n"; 
+	exit ;
+}
+
+## Get files or just print names
+for my $n(0..$#retFiles){
+
+  ## KB 3/23/20: added sr/pe functionality
+	my $f = $retFiles[$n];
+	$f =~ s/^(.+).R[12].fastq.gz/$1/;
+  ## KB 3/23/20: END
+
+	my $out;
+	my $nSz = $retSz[$n]; $nSz =~ s/G//;
+	$totSz += $nSz;
+
+	$out .= "$retSz[$n]\t" unless ($doNotShowMetaData);
+	$out .= $retFiles[$n];
+	$out .= "\tMETADATA ==> $retMeta[$n]" unless ($doNotShowMetaData);
+
+	print $out."\n";
+}
+
+if ($getFiles){
+	for my $n(0..$#retFiles){
+		system('obj_get -D . -v '.$bucket2use." ".$retFiles[$n]);
+	}
+}
+
+print STDERR "Total Size = $totSz\G\n\n";
+################################################################################################################
+sub showHelp{
+	my $msg = shift;
+
+	print STDERR "\n";
+	if ($msg){
+		print STDERR "***************************************************************************************************\n";
+		print STDERR "INVALID ARGUMENTS: \n";
+		print STDERR "---------------------------------------------------------------------------------------------------\n";
+		print STDERR $msg."\n";
+		print STDERR "***************************************************************************************************\n";
+	}
+
+	print STDERR "lsObj\n";
+	print STDERR "---------------------------------------------------------------------------------------------------\n";
+	print STDERR "Look up files in the processed data object store\n";
+	print STDERR "---------------------------------------------------------------------------------------------------\n";
+	print STDERR "\n";
+	print STDERR "--p           : sample regex  : This can simply be text or can use perl regex special characters\n";
+	print STDERR "                                regexes with escape characters should be quoted\n";
+	print STDERR "                                Examples:\n";
+	print STDERR "                                lsObj --p 171222_0604_7_GGCTAC_GC_121517_B6_zygotene_boris\n";
+	print STDERR "                                lsObj --p GC_121517_B6_zygotene_boris\n";
+	print STDERR "                                lsObj --p Hinch\n";
+	print STDERR "                                lsObj --p ".'\''.'17\d\d\d\d'.'\''."\n";
+	print STDERR "                                lsObj --p ".'\''.'18\.+16_'.'\''."\n";
+	print STDERR "                                lsObj --m --p ".'\''.'leptotene'.'\''."\n\n";
+	print STDERR "--m           : regex will also search sample metadata\n\n";
+	print STDERR "--v           : object vault to use (RDCOproc is currently the only option)\n\n";
+	print STDERR "--nx          : do not show metadata\n\n";
+	print STDERR "--ns          : do not show sizes\n\n";
+	print STDERR "--r           : requery object store (use sparingly; vault is infrequently updated)\n\n";
+	print STDERR "--get         : copy files from vault to current folder\n\n";
+	print STDERR "--h           : show help\n\n";
+
+}

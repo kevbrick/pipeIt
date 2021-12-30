@@ -18,14 +18,14 @@ process bwa4D {
   def nm = fq1.name.replaceAll("R1.(\\d+).fastq.gz","\$1")
   //println txt.replaceAll("(kevin)_(\\d+)_","\$2--\$1")
   """
-  ln -s ${fq1} fastq1.gz
-  ln -s ${fq2} fastq2.fz
+  #ln -s ${fq1} fastq1.gz
+  #ln -s ${fq2} fastq2.gz
 
   bwa mem \
     -t ${task.cpus} \
     -SP5M \
     ${params.bwaidx} \
-    ${fq1} ${fq2} | samtools view -Shb - >${nm}.BWAinit.bam
+    ${fq1} ${fq2} | samtools view -Shb -o ${nm}.BWAinit.bam -
   """
   }
 
@@ -777,7 +777,7 @@ process mergepairs_nodedup {
 process addfrag2pairs{
   tag { sample }
 
-  publishDir "${params.outdir}/pairs", mode: 'copy', overwrite: true
+  //publishDir "${params.outdir}/pairs", mode: 'copy', overwrite: true
 
   input:
   tuple(val(sample), path(pairs), path(idx), path(re))

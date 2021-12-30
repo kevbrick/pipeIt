@@ -262,7 +262,8 @@ workflow {
 
   // Reports
   if (params.phased){
-    phasingReport = concatenate_phasing_reports(bamMDOK.report.mix(samPEphased.report).groupTuple(by: 0))
+    ch_rep = bamMDOK.report.mix(samPEphased.report).map{ ["${it[0]}",it[1] ] }.groupTuple(by: 0).view()
+    phasingReport = concatenate_phasing_reports(ch_rep)
     allelicReport = concatenate_allelicstatus_reports(bamMDOK.rep.groupTuple(by: 0))
   }
 

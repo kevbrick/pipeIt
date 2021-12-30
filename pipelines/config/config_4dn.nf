@@ -12,16 +12,16 @@ profiles{
 
 process {
   withName:bwa4D{
-    cpus = { 12 }
-    memory = { 16.GB }
-    time = { 16.h * task.attempt * process_length_factor}
+    cpus = { 8 }
+    memory = { 32.GB }
+    time = { 24.h * task.attempt * process_length_factor}
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:bowtie2_end2end{
-    cpus = { 12 }
-    memory = { 16.GB }
-    time = { 16.h * task.attempt * process_length_factor}
+    cpus = { 8 }
+    memory = { 32.GB }
+    time = { 24.h * task.attempt * process_length_factor}
     container = 'docker://nservant/hicpro:latest'
   }
 
@@ -71,48 +71,48 @@ process {
   withName:pairsam{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 8.h * task.attempt * process_length_factor }
+    time = { 18.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:mergepairs_dedup{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 8.h * task.attempt * process_length_factor }
+    time = { 24.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:filter_pairs{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 8.h * task.attempt * process_length_factor }
+    time = { 24.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:pairtools_stats{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 8.h * task.attempt * process_length_factor }
+    time = { 18.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:splitByPhase{
     cpus = { 4 }
     memory = { 16.GB }
-    time = { 48.hour * task.attempt * process_length_factor }
+    time = { 36.hour * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:pairs_to_bam{
     cpus = { 2 }
-    memory = { 8.GB }
+    memory = { 16.GB }
     time = { 4.hour * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:clean_dnase_bam{
     cpus = { 2 }
-    memory = { 8.GB }
+    memory = { 16.GB }
     time = { 4.hour * task.attempt * process_length_factor }
     container = "quay.io/biocontainers/pysam:0.15.2--py36h02877da_7"
   }
@@ -120,7 +120,7 @@ process {
   withName:make_mnase_bigwig{
     cpus = { 12 }
     memory = { 16.GB }
-    time = { 4.hour * task.attempt * process_length_factor }
+    time = { 8.hour * task.attempt * process_length_factor }
     container = "quay.io/biocontainers/deeptools:3.5.1--py_0"
   }
 
@@ -134,8 +134,9 @@ process {
   withName:mergepairs_nodedup{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 8.h * task.attempt * process_length_factor }
+    time = { 24.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
+    clusterOptions = ' --gres=lscratch:2000 '
   }
 
   withName:get_RE_file{
@@ -148,15 +149,24 @@ process {
   withName:pairsQC{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 4.h * task.attempt * process_length_factor }
+    time = { 8.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
   }
 
   withName:addfrag2pairs{
     cpus = { 8 }
     memory = { 16.GB }
-    time = { 8.h * task.attempt * process_length_factor }
+    time = { 32.h * task.attempt * process_length_factor }
     container = "docker://duplexa/4dn-hic:v43"
+    clusterOptions = ' --gres=lscratch:2000 '
+  }
+
+  withName:mergepairs_bio_replicates{
+    cpus = { 8 }
+    memory = { 16.GB }
+    time = { 24.h * task.attempt * process_length_factor }
+    container = "docker://duplexa/4dn-hic:v43"
+    clusterOptions = ' --gres=lscratch:2000 '
   }
 
   withName:run_cooler{
@@ -169,7 +179,7 @@ process {
   withName:balance_cool_matrix{
     cpus = { 16 }
     memory = { 16.GB }
-    time = { 10.h * task.attempt * process_length_factor }
+    time = { 16.h * task.attempt * process_length_factor }
     container = "docker://kevbrick/cooltools:1.0"
   }
 

@@ -1,13 +1,16 @@
 *test_*
+*test*
 *test2_*
 *Test_*
 *magulova*
 *OLDPIP*
 *callSSDSpeaks*
 *accessoryFiles*
+*tests*
 *singularity*
 *dsl2tst*
 test.nf
 testMakeSS.nf
 oldPipes
-nf-core-ssds/
+nf-core-ssds*
+ssds_interval_beds*

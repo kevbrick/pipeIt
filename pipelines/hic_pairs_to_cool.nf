@@ -161,6 +161,6 @@ workflow {
   coolM   = cool2multirescool(cool)
 
   hic     = run_juicebox_pre(validpairs)
-  hicool  = hicnormvector_to_mcool(cool.join(hic))
+  //hicool  = hicnormvector_to_mcool(cool.join(hic))
 
 }
